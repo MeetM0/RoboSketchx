@@ -28,6 +28,13 @@
     "plugins": [
       "expo-router",
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "RoboSketch needs access to your photos so you can turn one into a drawing.",
+          "cameraPermission": "RoboSketch needs the camera so you can photograph something to draw."
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-icon.png",

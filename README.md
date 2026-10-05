@@ -1,50 +1,46 @@
-# Welcome to your Expo app 👋
+# RoboSketch
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Turn a photo into line art that a drawing robot / pen plotter can draw.
+
+1. Take or choose a photo.
+2. RoboSketch traces its outlines into pen strokes (pick **Low / Medium / High** detail).
+3. Preview the drawing on your sheet of paper, then export **G-code** for the robot or **SVG**.
+
+Runs on iOS, Android and web (Expo SDK 54, expo-router).
 
 ## Get started
 
-1. Install dependencies
-
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+Requires Node.js 20.19.4 or newer.
 
 ```bash
-npm run reset-project
+npm install
+npx expo start
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Press `i` (iOS simulator), `a` (Android emulator) or `w` (web), or scan the QR code with Expo Go.
 
-## Learn more
+## Project layout
 
-To learn more about developing your project with Expo, look at the following resources:
+| Path | What it is |
+| --- | --- |
+| `app/(tabs)/index.tsx` | **Create** screen: pick a photo, preview the sketch, export |
+| `app/(tabs)/plotter.tsx` | **Plotter** screen: paper size, margin, speeds, pen up/down G-code |
+| `lib/sketch/` | The photo → strokes engine (pure TypeScript, no React) |
+| `lib/prepare-photo.ts` | Downscales the picked photo to 512px and returns it as JPEG base64 |
+| `lib/plotter-settings.tsx` | Plotter settings context, persisted with AsyncStorage |
+| `lib/share-file.ts` / `.web.ts` | Share sheet on native, file download on web |
+| `components/sketch-preview.tsx` | Draws the strokes on the configured paper with react-native-svg |
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## How the sketch engine works (`lib/sketch`)
 
-## Join the community
+1. **Decode** the JPEG to RGBA (`jpeg-js`) and convert to greyscale.
+2. **Canny edge detection** (`edges.ts`): Gaussian blur → Sobel gradients → non-max suppression →
+   hysteresis. The strong-edge threshold is the stronger of a percentile cut and a minimum contrast
+   step, so flat noisy backgrounds stay blank.
+3. **Trace** connected edge pixels into polylines (`trace.ts`), starting at line ends.
+4. **Clean up** (`geometry.ts`): drop short strokes, simplify with Ramer–Douglas–Peucker, and order
+   strokes nearest-neighbour from the origin to cut pen-up travel.
+5. **Export** (`export.ts`): SVG, or G-code fitted inside the paper margins (Y flipped for the
+   machine, pen up/down commands and feed rates from the Plotter settings).
 
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Detail presets live in `DETAIL_PRESETS` in `lib/sketch/index.ts`.

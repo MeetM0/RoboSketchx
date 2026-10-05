@@ -19,15 +19,17 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
+          title: 'Create',
+          tabBarIcon: ({ color }) => (
+            <IconSymbol size={28} name="pencil.and.outline" color={color} />
+          ),
         }}
       />
       <Tabs.Screen
-        name="explore"
+        name="plotter"
         options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
+          title: 'Plotter',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="gearshape.fill" color={color} />,
         }}
       />
     </Tabs>
