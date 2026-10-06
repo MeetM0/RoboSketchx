@@ -11,6 +11,11 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { ATT_HEADER_BYTES, type AckMode } from '@/lib/robot/protocol';
 import { useRobot } from '@/lib/robot/robot-context';
 
+const WEB_WRITE_OPTIONS = [
+  { value: 'safe', label: '20 bytes (safe)' },
+  { value: 'long', label: 'Long writes' },
+] as const;
+
 const FIRMWARE_OPTIONS = [
   { value: 'grbl', label: 'GRBL' },
   { value: 'custom', label: 'Custom' },
@@ -55,7 +60,7 @@ export function RobotPanel() {
               <ThemedText style={[styles.small, { color: colors.icon }]}>
                 {robot.robot.mtuKnown
                   ? `MTU ${robot.robot.mtu} · ${robot.robot.payloadBytes}-byte chunks`
-                  : `${robot.robot.payloadBytes}-byte chunks · MTU set by the browser`}
+                  : `${robot.robot.payloadBytes}-byte chunks · MTU not reported by the browser`}
               </ThemedText>
             )}
           </View>
@@ -152,6 +157,20 @@ export function RobotPanel() {
               onCommit={(s) => updateSettings({ ackTimeoutMs: Math.round(s * 1000) })}
             />
           </View>
+          {process.env.EXPO_OS === 'web' && (
+            <>
+              <ThemedText type="defaultSemiBold">Browser writes</ThemedText>
+              <SegmentedControl
+                options={WEB_WRITE_OPTIONS}
+                value={settings.webLongWrites ? 'long' : 'safe'}
+                onChange={(v) => updateSettings({ webLongWrites: v === 'long' })}
+              />
+              <ThemedText style={[styles.small, { color: colors.icon }]}>
+                Browsers don&apos;t report the negotiated MTU. 20-byte writes always work; long
+                writes send up to {settings.mtu - ATT_HEADER_BYTES} bytes and need firmware support.
+              </ThemedText>
+            </>
+          )}
           <ThemedText type="defaultSemiBold">Firmware</ThemedText>
           <SegmentedControl
             options={FIRMWARE_OPTIONS}

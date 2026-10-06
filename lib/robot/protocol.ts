@@ -42,6 +42,11 @@ export type RobotSettings = {
   ackToken: string;
   /** Give up if the robot doesn't acknowledge within this time. */
   ackTimeoutMs: number;
+  /**
+   * Web only: browsers don't report the MTU. Off (default) → 20-byte writes, the BLE minimum.
+   * On → MTU−3-byte writes, which the firmware must accept as BLE "long writes".
+   */
+  webLongWrites: boolean;
 };
 
 /** Nordic UART Service: the common "serial over BLE" profile used by ESP32 / nRF firmware. */
@@ -60,11 +65,27 @@ export const DEFAULT_ROBOT_SETTINGS: RobotSettings = {
   rxBufferBytes: 128,
   ackToken: 'ok',
   ackTimeoutMs: 30_000,
+  webLongWrites: false,
 };
+
+/** Payload of the smallest BLE MTU (23), which every device supports. */
+export const MIN_PAYLOAD_BYTES = 20;
 
 /** Largest chunk of G-code that fits in one write for a negotiated MTU. */
 export function payloadSize(requestedMtu: number, negotiatedMtu: number): number {
-  return Math.max(20, Math.min(requestedMtu, negotiatedMtu) - ATT_HEADER_BYTES);
+  return Math.max(MIN_PAYLOAD_BYTES, Math.min(requestedMtu, negotiatedMtu) - ATT_HEADER_BYTES);
+}
+
+/**
+ * Bytes per BLE write for a connection: from the *negotiated* MTU when the platform reports
+ * it (iOS / Android); otherwise (web) the 20-byte minimum unless long writes are enabled.
+ */
+export function chunkPayload(
+  settings: Pick<RobotSettings, 'mtu' | 'webLongWrites'>,
+  link: { mtu: number; mtuKnown: boolean }
+): number {
+  if (!link.mtuKnown && !settings.webLongWrites) return MIN_PAYLOAD_BYTES;
+  return payloadSize(settings.mtu, link.mtu);
 }
 
 export type GcodeChunk = {

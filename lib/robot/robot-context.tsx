@@ -10,7 +10,7 @@ import {
 
 import { robotLink } from './link';
 import type { FoundRobot, RobotConnection } from './link-types';
-import { DEFAULT_ROBOT_SETTINGS, payloadSize, type RobotSettings } from './protocol';
+import { chunkPayload, DEFAULT_ROBOT_SETTINGS, type RobotSettings } from './protocol';
 import { recoverOnConnect, runJob } from './job';
 import { type SendProgress } from './sender';
 import { stopRobot } from './stop';
@@ -176,10 +176,13 @@ export function RobotProvider({ children }: PropsWithChildren) {
         name: connection.name,
         mtu: connection.mtu,
         mtuKnown: connection.mtuKnown,
-        payloadBytes: payloadSize(settings.mtu, connection.mtu),
+        payloadBytes: chunkPayload(settings, connection),
       });
       disconnectedRef.current = false;
-      addLog(`Connected to ${connection.name} (MTU ${connection.mtu})`);
+      const payload = chunkPayload(settings, connection);
+      const mtuText = connection.mtuKnown ? `negotiated MTU ${connection.mtu}` : 'MTU not reported';
+      console.info(`[robot] ${connection.name}: ${mtuText}, ${payload}-byte writes`);
+      addLog(`Connected to ${connection.name} (${mtuText}, ${payload}-byte writes)`);
       // A job was interrupted: the robot may still be moving with the pen down. Stop it before
       // anything else; the job itself is never resumed.
       if (pendingStopRef.current) {

@@ -140,6 +140,21 @@ async function streamGrbl(
         next++;
         count++;
       }
+      if (count === 0 && used + lines[next].length < rx) {
+        // The buffer has room but the line is longer than one BLE write: send it in pieces.
+        const line = lines[next];
+        for (let i = 0; i < line.length; i += options.payloadBytes) {
+          if (options.isCancelled?.()) throw new SendCancelled();
+          await transport.write(asciiBytes(line.slice(i, i + options.payloadBytes)));
+        }
+        used += line.length;
+        inFlight.push(line.length);
+        next++;
+        progress.chunksSent += 1;
+        progress.bytesSent += line.length;
+        options.onProgress?.({ ...progress });
+        continue;
+      }
       if (count === 0) {
         // Buffer full: wait for the controller to finish a line.
         await acks.waitFor(released + 1, options.ackTimeoutMs, options.isCancelled);

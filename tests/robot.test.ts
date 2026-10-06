@@ -168,3 +168,41 @@ test('B4: user cancel is still "cancelled", other errors "failed"', async () => 
   assert.equal(failed.state, 'failed');
   assert.match(failed.error ?? '', /error:22/);
 });
+
+test('B3: chunk size follows the negotiated MTU; unknown MTU (web) uses the 20-byte minimum', async () => {
+  const protocol = await import('../lib/robot/protocol');
+  const chunkPayload = (protocol as unknown as { chunkPayload?: Function }).chunkPayload;
+  assert.equal(typeof chunkPayload, 'function', 'chunkPayload() exists');
+  const s = DEFAULT_ROBOT_SETTINGS;
+  const cases = [
+    ['Android, negotiated 400', { mtu: 400, mtuKnown: true }, s, 397],
+    ['iOS, negotiated 185', { mtu: 185, mtuKnown: true }, s, 182],
+    ['negotiated 517, requested 400', { mtu: 517, mtuKnown: true }, s, 397],
+    ['web, MTU unknown', { mtu: 400, mtuKnown: false }, s, 20],
+    ['web, long writes enabled', { mtu: 400, mtuKnown: false }, { ...s, webLongWrites: true }, 397],
+  ] as const;
+  for (const [name, link, settings, expected] of cases) {
+    const got = chunkPayload!(settings, link);
+    console.log(`  ${name}: ${got} bytes`);
+    assert.equal(got, expected, name);
+  }
+});
+
+test('B3: GRBL streaming with 20-byte writes splits lines longer than one write', async () => {
+  const robot = fakeGrbl({ rxBufferBytes: 128 });
+  await sendGcode(robot.transport, GCODE, {
+    payloadBytes: 20,
+    ackMode: 'grbl',
+    ackToken: 'ok',
+    ackTimeoutMs: 2000,
+    rxBufferBytes: 128,
+  });
+  await new Promise((r) => setTimeout(r, 50));
+  const maxWrite = Math.max(...robot.raw.map((b) => b.length));
+  console.log(
+    `  20-byte writes: ${robot.raw.length} writes, max ${maxWrite} B, max buffered ${robot.maxBuffered}, executed ${robot.executed.length}/${commands.length}`
+  );
+  assert.ok(maxWrite <= 20);
+  assert.ok(robot.maxBuffered < 128);
+  assert.deepEqual(robot.executed, commands);
+});

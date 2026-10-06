@@ -23,25 +23,22 @@ export function SendToRobot({ getGcode, penUpCommand, disabled }: Props) {
   const { status, robot, job, send, cancel } = useRobot();
   const sending = job?.state === 'sending';
 
-  if (status !== 'connected' || !robot) {
-    return (
-      <View style={styles.row}>
-        <Button
-          title="Connect robot to send"
-          icon="antenna.radiowaves.left.and.right"
-          variant="secondary"
-          onPress={() => router.navigate('/plotter')}
-        />
-      </View>
-    );
-  }
-
+  const connected = status === 'connected' && !!robot;
   const fraction =
     job && job.progress.byteCount ? job.progress.bytesSent / job.progress.byteCount : 0;
 
   return (
     <View style={styles.container}>
-      {sending ? (
+      {!connected ? (
+        <View style={styles.row}>
+          <Button
+            title="Connect robot to send"
+            icon="antenna.radiowaves.left.and.right"
+            variant="secondary"
+            onPress={() => router.navigate('/plotter')}
+          />
+        </View>
+      ) : sending ? (
         <View style={styles.row}>
           <Button title="Cancel sending" icon="xmark" variant="secondary" onPress={cancel} />
         </View>
@@ -56,6 +53,7 @@ export function SendToRobot({ getGcode, penUpCommand, disabled }: Props) {
         </View>
       )}
 
+      {/* The last job's outcome stays visible even after the robot disconnects. */}
       {job && (
         <View style={styles.progress}>
           <View style={[styles.track, { backgroundColor: colors.card }]}>
@@ -74,7 +72,7 @@ export function SendToRobot({ getGcode, penUpCommand, disabled }: Props) {
             {job.state === 'sending'
               ? `Sending ${job.progress.unit} ${Math.min(job.progress.chunksSent + 1, job.progress.chunkCount)} of ${job.progress.chunkCount} · ${kb(job.progress.bytesSent)} of ${kb(job.progress.byteCount)}`
               : job.state === 'done'
-                ? `Sent ${job.progress.chunkCount} ${job.progress.unit}s (${kb(job.progress.byteCount)}) to ${robot.name}.`
+                ? `Sent ${job.progress.chunkCount} ${job.progress.unit}s (${kb(job.progress.byteCount)}).`
                 : job.state === 'cancelled'
                   ? `Cancelled after ${job.progress.chunksSent} of ${job.progress.chunkCount} ${job.progress.unit}s; ${job.penLifted ? 'pen lifted' : "couldn't lift the pen"}.`
                   : `Failed after ${job.progress.chunksSent} of ${job.progress.chunkCount} ${job.progress.unit}s: ${job.error}`}
