@@ -53,3 +53,27 @@ test('G1: custom pen commands (servo) are emitted verbatim', () => {
   assert.ok(gcode.includes('\nM3 S90\nG1 X'));
   assert.equal(counts[1], undefined);
 });
+
+test('G2: header declares units, absolute mode and start position; footer ends with M2', () => {
+  for (const startMode of ['g92', 'g28', 'home'] as const) {
+    const settings = { ...DEFAULT_PLOTTER_SETTINGS, startMode };
+    const { gcode } = run(settings);
+    const issues = validateGcode(gcode, rulesFor(settings));
+    const commands = gcode
+      .split('\n')
+      .map((l) => l.replace(/;.*$/, '').trim())
+      .filter(Boolean);
+    console.log(
+      `  ${startMode}: header ${JSON.stringify(commands.slice(0, 4))} … footer ${JSON.stringify(commands.slice(-3))}`
+    );
+    assert.deepEqual(
+      issues.filter((i) => i.invariant === 3),
+      []
+    );
+    assert.equal(commands[commands.length - 1], 'M2');
+    assert.deepEqual(
+      issues.filter((i) => /M2/.test(i.message)),
+      []
+    );
+  }
+});

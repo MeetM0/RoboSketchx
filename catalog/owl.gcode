@@ -2,6 +2,7 @@
 ; paper 210x297mm, margin 10mm, 16 strokes
 G21 ; millimetres
 G90 ; absolute positioning
+G92 X0 Y0 ; pen is at X0 Y0 (paper bottom-left)
 G0 Z5.00
 G0 X12.44 Y52.28
 G1 Z0.00 F500
@@ -247,3 +248,4 @@ G1 X56.28 Y205.74
 G1 X56.28 Y205.74
 G0 Z5.00
 G0 X0.00 Y297.00
+M2 ; end of program

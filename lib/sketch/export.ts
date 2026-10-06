@@ -29,6 +29,14 @@ export type PlotterSettings = {
   penUpCommand: string;
   penDownCommand: string;
   /**
+   * How the job establishes where the pen is before moving:
+   * - `g92`  — `G92 X0 Y0`: the pen's current position becomes X0 Y0 (place it at the
+   *   paper's bottom-left corner before starting);
+   * - `g28`  — `G28`: return to the machine's reference position;
+   * - `home` — `$H`: GRBL homing cycle (needs homing switches).
+   */
+  startMode: 'g92' | 'g28' | 'home';
+  /**
    * Where the pen goes when the drawing is done:
    * - `corner` — the paper corner nearest to the last stroke (short move, keeps the pen
    *   off the drawing);
@@ -50,6 +58,7 @@ export const DEFAULT_PLOTTER_SETTINGS: PlotterSettings = {
   penFeedRate: 500,
   penUpCommand: 'M5',
   penDownCommand: 'M3 S90',
+  startMode: 'g92',
   finishAt: 'corner',
 };
 
@@ -160,6 +169,12 @@ const num = (n: number) => {
   return text === '-0.00' ? '0.00' : text;
 };
 
+const START_LINES: Record<PlotterSettings['startMode'], string> = {
+  g92: 'G92 X0 Y0 ; pen is at X0 Y0 (paper bottom-left)',
+  g28: 'G28 ; go to reference position',
+  home: '$H ; homing cycle',
+};
+
 export const penUpLine = (s: PlotterSettings) =>
   s.penMode === 'z' ? `G0 Z${num(s.penUpZ)}` : s.penUpCommand;
 export const penDownLine = (s: PlotterSettings) =>
@@ -192,6 +207,7 @@ export function sketchToGcode(sketch: Sketch, settings: PlotterSettings): string
     `; paper ${settings.paperWidthMm}x${settings.paperHeightMm}mm, margin ${settings.marginMm}mm, ${plan.strokeCount} strokes`,
     'G21 ; millimetres',
     'G90 ; absolute positioning',
+    START_LINES[settings.startMode],
     penUpLine(settings),
   ];
   for (const stroke of plan.strokes) {
@@ -206,6 +222,6 @@ export function sketchToGcode(sketch: Sketch, settings: PlotterSettings): string
     lines.push(penUpLine(settings));
   }
   if (plan.park) lines.push(`G0 ${fmt(plan.park)}`);
-  lines.push('');
+  lines.push('M2 ; end of program', '');
   return lines.join('\n');
 }

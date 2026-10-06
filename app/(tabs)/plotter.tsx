@@ -11,6 +11,12 @@ import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { usePlotterSettings } from '@/lib/plotter-settings';
 
+const START_OPTIONS = [
+  { value: 'g92', label: 'Here (G92)' },
+  { value: 'g28', label: 'G28' },
+  { value: 'home', label: 'Home ($H)' },
+] as const;
+
 const PEN_MODE_OPTIONS = [
   { value: 'z', label: 'Z axis' },
   { value: 'custom', label: 'Custom commands' },
@@ -118,6 +124,16 @@ export default function PlotterScreen() {
                 onCommit={(travelFeedRate) => updateSettings({ travelFeedRate })}
               />
             </View>
+          </Section>
+
+          <Section
+            title="Start position"
+            hint="Here (G92): put the pen at the paper's bottom-left corner before sending; that spot becomes X0 Y0. G28 returns to the machine's reference position. Home ($H) runs GRBL's homing cycle (needs limit switches).">
+            <SegmentedControl
+              options={START_OPTIONS}
+              value={settings.startMode}
+              onChange={(startMode) => updateSettings({ startMode })}
+            />
           </Section>
 
           <Section
