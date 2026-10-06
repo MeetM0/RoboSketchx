@@ -9,7 +9,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "build-fonts": "node ./scripts/build-fonts.js"
+    "build-fonts": "node ./scripts/build-fonts.js",
+    "export-catalog": "node -r sucrase/register ./scripts/export-catalog.ts"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
@@ -50,6 +51,7 @@
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",
     "hersheytext": "^2.0.0",
+    "sucrase": "^3.35.1",
     "typescript": "~5.9.2"
   },
   "private": true

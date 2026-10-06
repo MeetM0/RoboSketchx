@@ -2,13 +2,13 @@
 
 Turn photos and text into pen strokes that a drawing robot / pen plotter can draw.
 
-- **Draw:** take or choose a photo; RoboSketch removes the background and traces the subject's
-  outlines (pick **Low / Medium / High** detail).
-- **Write → Type:** type a message and pick a single-stroke font (Print, Handwriting, Cursive,
+- **Draw → Catalog:** pick one of 12 built-in cartoon line drawings (animals, things, nature);
+  each comes with ready-made G-code in [`catalog/`](catalog/README.md).
+- **Draw → My photo:** take or choose a photo; RoboSketch removes the background and traces the
+  subject's outlines (pick **Low / Medium / High** detail).
+- **Write:** type a message and pick a single-stroke font (Print, Handwriting, Cursive,
   Calligraphy), size and alignment; "Natural" adds slight per-letter variation so it looks
   hand-written.
-- **Write → Scan page:** photograph handwriting or a line drawing on paper; RoboSketch traces the
-  centre of every pen line so the robot copies it in the same hand.
 
 Every mode previews the result on your sheet of paper and exports **G-code** or **SVG**.
 
@@ -29,19 +29,30 @@ Press `i` (iOS simulator), `a` (Android emulator) or `w` (web), or scan the QR c
 
 | Path | What it is |
 | --- | --- |
-| `app/(tabs)/index.tsx` | **Draw** screen: pick a photo, preview the sketch, export |
-| `app/(tabs)/write.tsx` | **Write** screen: type text or scan a handwritten page |
+| `app/(tabs)/index.tsx` | **Draw** screen: cartoon catalog, or trace your own photo |
+| `app/(tabs)/write.tsx` | **Write** screen: type text for the robot to write |
 | `app/(tabs)/plotter.tsx` | **Plotter** screen: paper size, margin, speeds, pen up/down G-code |
+| `lib/catalog/` | Cartoon catalog: `pictures.ts` (SVG path artwork) and an SVG path → strokes flattener |
+| `catalog/` | Ready-made `.gcode` + `.svg` per cartoon for A4 (`npm run export-catalog`) |
 | `lib/sketch/` | The photo → strokes engine (pure TypeScript, no React) |
-| `lib/sketch/centerline.ts` | Page scan: ink threshold → thinning → centre-line strokes |
 | `lib/text/` | Text → strokes: single-stroke fonts (`font-data.ts`, generated) and line layout |
 | `scripts/build-fonts.js` | Regenerates `lib/text/font-data.ts` from the `hersheytext` fonts (`npm run build-fonts`) |
 | `lib/prepare-photo.ts` | Downscales the picked photo to 512px and returns it as JPEG base64 |
 | `lib/plotter-settings.tsx` | Plotter settings context, persisted with AsyncStorage |
 | `lib/share-file.ts` / `.web.ts` | Share sheet on native, file download on web |
+| `components/catalog-browser.tsx` | Catalog grid with category filter and preview |
 | `components/sketch-actions.tsx` | Stroke count / size / time summary and the export buttons |
 | `components/sketch-preview.tsx` | Draws the strokes on the configured paper with react-native-svg |
 | `components/background-overlay.tsx` | Fades the removed background over the photo |
+
+## Cartoon catalog (`lib/catalog`)
+
+Each picture is a list of SVG path strings in a 100 × 100 box, drawn as single pen lines.
+`flattenPath` turns curves and arcs into short straight moves, and `pictureToSketch` orders the
+strokes and crops them so the drawing fills the paper. The app generates G-code for your
+current Plotter settings; `npm run export-catalog` also writes ready-made A4 files to
+`catalog/`. To add a picture, append it to `CATALOG` in `lib/catalog/pictures.ts` and re-run
+the export.
 
 ## How the sketch engine works (`lib/sketch`)
 
@@ -69,15 +80,3 @@ to fill. RoboSketch ships four from the Hershey / EMS engraving fonts (licences 
 `lib/text/FONTS-LICENSE.md`). `layoutText` wraps words to the paper's writing area, splits
 over-long words, reports lines that don't fit and characters the font lacks, and keeps strokes
 in writing order.
-
-## Scanning a page (`lib/sketch/centerline.ts`)
-
-1. **Ink vs paper** with an adaptive (local mean) threshold, so shadows and uneven light don't
-   matter. Photos are processed at 1200 px so handwriting stays several pixels thick.
-2. **Clean up:** drop specks and large blobs touching the photo edge (table, page edge,
-   shadows); fill pin-holes inside strokes.
-3. **Zhang–Suen thinning** to 1-pixel centre lines; restore dots that thinning erases.
-4. **Trace**, drop stray staircase pixels, simplify, order, join strokes that touch, and crop
-   to the writing so it fills the paper.
-
-This copies the *shape* of the writing; it doesn't recognise the words (no OCR).

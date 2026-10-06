@@ -1,4 +1,4 @@
-/** Binary-mask helpers (1 = set, 0 = clear) shared by background removal and page scanning. */
+/** Binary-mask helpers (1 = set, 0 = clear) used by background removal. */
 
 /** Separable square erosion (min filter). */
 export function erode(mask: Uint8Array, width: number, height: number, radius: number) {

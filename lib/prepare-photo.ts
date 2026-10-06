@@ -6,9 +6,6 @@ import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
  */
 export const PROCESSING_SIZE = 512;
 
-/** Page scans need more pixels: handwriting strokes would be only ~1px wide at 512. */
-export const SCAN_PROCESSING_SIZE = 1200;
-
 /** Downscales a picked photo and returns it as base64 JPEG for the sketch engine. */
 export async function preparePhoto(
   uri: string,

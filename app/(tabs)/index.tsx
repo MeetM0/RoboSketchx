@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BackgroundOverlay } from '@/components/background-overlay';
 import { Button } from '@/components/button';
+import { CatalogBrowser } from '@/components/catalog-browser';
 import { SegmentedControl } from '@/components/segmented-control';
 import { SketchActions } from '@/components/sketch-actions';
 import { SketchPreview } from '@/components/sketch-preview';
@@ -41,13 +42,23 @@ const BACKGROUND_OPTIONS = [
 
 type BackgroundMode = (typeof BACKGROUND_OPTIONS)[number]['value'];
 
-const REMOVAL_FAILURE_MESSAGES: Record<Extract<BackgroundRemoval, { ok: false }>['reason'], string> = {
+const REMOVAL_FAILURE_MESSAGES: Record<
+  Extract<BackgroundRemoval, { ok: false }>['reason'],
+  string
+> = {
   'busy-background':
     'The background is too busy to remove, so the whole photo is used. A plain wall, table or sky works best.',
   'no-background':
     "Couldn't tell the background apart from the subject, so the whole photo is used.",
   'no-subject': "Couldn't find a clear subject, so the whole photo is used.",
 };
+
+const MODE_OPTIONS = [
+  { value: 'catalog', label: 'Catalog' },
+  { value: 'photo', label: 'My photo' },
+] as const;
+
+type DrawMode = (typeof MODE_OPTIONS)[number]['value'];
 
 const VIEW_OPTIONS = [
   { value: 'sketch', label: 'Sketch' },
@@ -57,7 +68,29 @@ const VIEW_OPTIONS = [
 // Edge detection runs on the JS thread; yield first so the spinner can render.
 const nextFrame = () => new Promise((resolve) => setTimeout(resolve, 50));
 
-export default function CreateScreen() {
+export default function DrawScreen() {
+  const colors = Colors[useColorScheme() ?? 'light'];
+  const [mode, setMode] = useState<DrawMode>('catalog');
+
+  return (
+    <ThemedView style={styles.screen}>
+      <SafeAreaView edges={['top']} style={styles.screen}>
+        <ScrollView contentContainerStyle={styles.content}>
+          <View style={styles.header}>
+            <ThemedText type="title">RoboSketch</ThemedText>
+            <ThemedText style={{ color: colors.icon }}>
+              Pick a cartoon or turn your own photo into lines your robot can draw.
+            </ThemedText>
+          </View>
+          <SegmentedControl options={MODE_OPTIONS} value={mode} onChange={setMode} />
+          {mode === 'catalog' ? <CatalogBrowser /> : <PhotoMode />}
+        </ScrollView>
+      </SafeAreaView>
+    </ThemedView>
+  );
+}
+
+function PhotoMode() {
   const colors = Colors[useColorScheme() ?? 'light'];
   const { settings } = usePlotterSettings();
   const [photo, setPhoto] = useState<PickedImage | null>(null);
@@ -146,139 +179,127 @@ export default function CreateScreen() {
       : null;
 
   return (
-    <ThemedView style={styles.screen}>
-      <SafeAreaView edges={['top']} style={styles.screen}>
-        <ScrollView contentContainerStyle={styles.content}>
-          <View style={styles.header}>
-            <ThemedText type="title">RoboSketch</ThemedText>
-            <ThemedText style={{ color: colors.icon }}>
-              Turn a photo into lines your robot can draw.
-            </ThemedText>
-          </View>
-
-          {!photo ? (
-            <View style={[styles.emptyCard, { borderColor: colors.border }]}>
-              <IconSymbol name="pencil.and.outline" size={48} color={colors.icon} />
-              <ThemedText type="subtitle">Start with a photo</ThemedText>
-              <ThemedText style={[styles.centerText, { color: colors.icon }]}>
-                Simple subjects with clear outlines on a plain background give the cleanest
-                drawings.
-              </ThemedText>
-            </View>
-          ) : (
-            <>
-              <SegmentedControl options={VIEW_OPTIONS} value={view} onChange={setView} />
+    <>
+      {!photo ? (
+        <View style={[styles.emptyCard, { borderColor: colors.border }]}>
+          <IconSymbol name="pencil.and.outline" size={48} color={colors.icon} />
+          <ThemedText type="subtitle">Start with a photo</ThemedText>
+          <ThemedText style={[styles.centerText, { color: colors.icon }]}>
+            Simple subjects with clear outlines on a plain background give the cleanest drawings.
+          </ThemedText>
+        </View>
+      ) : (
+        <>
+          <SegmentedControl options={VIEW_OPTIONS} value={view} onChange={setView} />
+          <View>
+            {view === 'photo' ? (
               <View>
-                {view === 'photo' ? (
-                  <View>
-                    <Image
-                      source={{ uri: photo.uri }}
-                      contentFit="fill"
-                      style={[
-                        styles.photo,
-                        {
-                          // Match the processed image exactly so the background overlay lines up.
-                          aspectRatio: source
-                            ? source.width / source.height
-                            : photo.width && photo.height
-                              ? photo.width / photo.height
-                              : 1,
-                        },
-                      ]}
-                    />
-                    {source && removalApplied && (
-                      <BackgroundOverlay
-                        mask={removalApplied.mask}
-                        width={source.width}
-                        height={source.height}
-                      />
-                    )}
-                  </View>
-                ) : sketch ? (
-                  <SketchPreview sketch={sketch} settings={settings} />
-                ) : (
-                  <View
-                    style={[
-                      styles.placeholder,
-                      {
-                        aspectRatio: settings.paperWidthMm / settings.paperHeightMm,
-                        backgroundColor: colors.card,
-                      },
-                    ]}
+                <Image
+                  source={{ uri: photo.uri }}
+                  contentFit="fill"
+                  style={[
+                    styles.photo,
+                    {
+                      // Match the processed image exactly so the background overlay lines up.
+                      aspectRatio: source
+                        ? source.width / source.height
+                        : photo.width && photo.height
+                          ? photo.width / photo.height
+                          : 1,
+                    },
+                  ]}
+                />
+                {source && removalApplied && (
+                  <BackgroundOverlay
+                    mask={removalApplied.mask}
+                    width={source.width}
+                    height={source.height}
                   />
                 )}
-                {busy && (
-                  <View style={styles.busyOverlay}>
-                    <ActivityIndicator size="large" color={colors.tint} />
-                    <ThemedText style={styles.busyText}>Tracing lines…</ThemedText>
-                  </View>
-                )}
               </View>
-
-              {view === 'photo' && removalApplied && (
-                <ThemedText style={[styles.note, { color: colors.icon }]}>
-                  Faded areas are treated as background and won&apos;t be drawn.
-                </ThemedText>
-              )}
-
-              <View style={styles.section}>
-                <ThemedText type="defaultSemiBold">Background</ThemedText>
-                <SegmentedControl
-                  options={BACKGROUND_OPTIONS}
-                  value={background}
-                  onChange={changeBackground}
-                  disabled={busy}
-                />
-                {removalFailure && (
-                  <ThemedText style={[styles.note, { color: colors.icon }]}>
-                    {removalFailure}
-                  </ThemedText>
-                )}
-              </View>
-
-              <View style={styles.section}>
-                <ThemedText type="defaultSemiBold">Detail</ThemedText>
-                <SegmentedControl
-                  options={DETAIL_OPTIONS}
-                  value={detail}
-                  onChange={changeDetail}
-                  disabled={busy}
-                />
-              </View>
-
-              <SketchActions
-                sketch={sketch}
-                disabled={busy}
-                fileName="robosketch-drawing"
-                onError={setError}
+            ) : sketch ? (
+              <SketchPreview sketch={sketch} settings={settings} />
+            ) : (
+              <View
+                style={[
+                  styles.placeholder,
+                  {
+                    aspectRatio: settings.paperWidthMm / settings.paperHeightMm,
+                    backgroundColor: colors.card,
+                  },
+                ]}
               />
-            </>
+            )}
+            {busy && (
+              <View style={styles.busyOverlay}>
+                <ActivityIndicator size="large" color={colors.tint} />
+                <ThemedText style={styles.busyText}>Tracing lines…</ThemedText>
+              </View>
+            )}
+          </View>
+
+          {view === 'photo' && removalApplied && (
+            <ThemedText style={[styles.note, { color: colors.icon }]}>
+              Faded areas are treated as background and won&apos;t be drawn.
+            </ThemedText>
           )}
 
-          {error && <ThemedText style={styles.error}>{error}</ThemedText>}
+          <View style={styles.section}>
+            <ThemedText type="defaultSemiBold">Background</ThemedText>
+            <SegmentedControl
+              options={BACKGROUND_OPTIONS}
+              value={background}
+              onChange={changeBackground}
+              disabled={busy}
+            />
+            {removalFailure && (
+              <ThemedText style={[styles.note, { color: colors.icon }]}>
+                {removalFailure}
+              </ThemedText>
+            )}
+          </View>
 
           <View style={styles.section}>
-            {photo && <ThemedText type="defaultSemiBold">New photo</ThemedText>}
-            <View style={styles.row}>
-              <Button
-                title="Take photo"
-                icon="camera.fill"
-                variant={photo ? 'secondary' : 'primary'}
-                disabled={busy}
-                onPress={() => pickPhoto('camera')}
-              />
-              <Button
-                title="Choose photo"
-                icon="photo.on.rectangle"
-                variant={photo ? 'secondary' : 'primary'}
-                disabled={busy}
-                onPress={() => pickPhoto('library')}
-              />
-            </View>
+            <ThemedText type="defaultSemiBold">Detail</ThemedText>
+            <SegmentedControl
+              options={DETAIL_OPTIONS}
+              value={detail}
+              onChange={changeDetail}
+              disabled={busy}
+            />
           </View>
-        </ScrollView>
-      </SafeAreaView>
-    </ThemedView>
+
+          <SketchActions
+            sketch={sketch}
+            disabled={busy}
+            fileName="robosketch-drawing"
+            onError={setError}
+          />
+        </>
+      )}
+
+      {error && <ThemedText style={styles.error}>{error}</ThemedText>}
+
+      <View style={styles.section}>
+        {photo && <ThemedText type="defaultSemiBold">New photo</ThemedText>}
+        <View style={styles.row}>
+          <Button
+            title="Take photo"
+            icon="camera.fill"
+            variant={photo ? 'secondary' : 'primary'}
+            disabled={busy}
+            onPress={() => pickPhoto('camera')}
+          />
+          <Button
+            title="Choose photo"
+            icon="photo.on.rectangle"
+            variant={photo ? 'secondary' : 'primary'}
+            disabled={busy}
+            onPress={() => pickPhoto('library')}
+          />
+        </View>
+      </View>
+    </>
   );
 }
 
