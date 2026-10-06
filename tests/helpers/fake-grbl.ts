@@ -15,6 +15,7 @@ export function fakeGrbl({
   let maxBuffered = 0;
   const executed: string[] = [];
   const raw: number[][] = [];
+  let resets = 0;
   let timer: ReturnType<typeof setTimeout> | null = null;
   const reply = (t: string) => listeners.forEach((l) => l(t));
   const pump = () => {
@@ -25,14 +26,32 @@ export function fakeGrbl({
     buffer = buffer.slice(nl + 1);
     executed.push(line);
     reply(failOn?.test(line) ? 'error:22\r\n' : 'ok\r\n');
-    if (buffer.includes('\n')) timer = setTimeout(pump, lineMs);
+    if (buffer.includes('\n') && !held) timer = setTimeout(pump, lineMs);
   };
+  let held = false;
   const transport: RobotTransport = {
     async write(bytes) {
       raw.push([...bytes]);
-      buffer += String.fromCharCode(...bytes);
+      for (const byte of bytes) {
+        // GRBL realtime commands act immediately and never enter the buffer.
+        if (byte === 0x21) {
+          held = true; // '!' feed hold
+          if (timer) clearTimeout(timer);
+          timer = null;
+          continue;
+        }
+        if (byte === 0x18) {
+          // Soft reset: drop everything buffered, stop holding, print the banner.
+          buffer = '';
+          held = false;
+          resets++;
+          setTimeout(() => reply("\r\nGrbl 1.1h ['$' for help]\r\n"), 5);
+          continue;
+        }
+        buffer += String.fromCharCode(byte);
+      }
       maxBuffered = Math.max(maxBuffered, buffer.length);
-      if (!timer) timer = setTimeout(pump, lineMs);
+      if (!timer && !held) timer = setTimeout(pump, lineMs);
     },
     onText(l) {
       listeners.add(l);
@@ -44,6 +63,9 @@ export function fakeGrbl({
     executed,
     raw,
     reply,
+    get resets() {
+      return resets;
+    },
     get maxBuffered() {
       return maxBuffered;
     },

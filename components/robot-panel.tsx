@@ -11,6 +11,11 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { ATT_HEADER_BYTES, type AckMode } from '@/lib/robot/protocol';
 import { useRobot } from '@/lib/robot/robot-context';
 
+const FIRMWARE_OPTIONS = [
+  { value: 'grbl', label: 'GRBL' },
+  { value: 'custom', label: 'Custom' },
+] as const;
+
 const ACK_OPTIONS = [
   { value: 'grbl', label: 'GRBL' },
   { value: 'line', label: '"ok"/line' },
@@ -147,6 +152,25 @@ export function RobotPanel() {
               onCommit={(s) => updateSettings({ ackTimeoutMs: Math.round(s * 1000) })}
             />
           </View>
+          <ThemedText type="defaultSemiBold">Firmware</ThemedText>
+          <SegmentedControl
+            options={FIRMWARE_OPTIONS}
+            value={settings.firmware}
+            onChange={(firmware) => updateSettings({ firmware })}
+          />
+          <ThemedText style={[styles.small, { color: colors.icon }]}>
+            {settings.firmware === 'grbl'
+              ? 'Cancel sends feed hold (!), soft reset (0x18), unlock ($X), then pen up. Re-home before the next job.'
+              : 'Cancel sends the stop command below (if any), then pen up.'}
+          </ThemedText>
+          {settings.firmware === 'custom' && (
+            <TextField
+              label="Stop command (clears the queue)"
+              value={settings.stopCommand}
+              autoCapitalize="none"
+              onCommit={(stopCommand) => updateSettings({ stopCommand: stopCommand.trim() })}
+            />
+          )}
           <ThemedText type="defaultSemiBold">Flow control</ThemedText>
           <SegmentedControl
             options={ACK_OPTIONS}

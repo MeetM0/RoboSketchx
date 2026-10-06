@@ -12,6 +12,7 @@ import { robotLink } from './link';
 import type { FoundRobot, RobotConnection } from './link-types';
 import { DEFAULT_ROBOT_SETTINGS, payloadSize, type RobotSettings } from './protocol';
 import { SendCancelled, sendGcode, type SendProgress } from './sender';
+import { stopRobot } from './stop';
 
 const STORAGE_KEY = 'robosketch.robotSettings.v1';
 const SCAN_DURATION_MS = 12_000;
@@ -222,12 +223,19 @@ export function RobotProvider({ children }: PropsWithChildren) {
       addLog(`Sent ${last.chunkCount} chunks (${last.byteCount} bytes)`);
     } catch (e) {
       if (e instanceof SendCancelled) {
-        // Lift the pen so it doesn't drag across the paper, then report.
+        // Stopping the sender isn't enough: the controller would keep drawing what it has
+        // buffered. Halt it, discard its queue and lift the pen.
         let lifted = false;
         if (connectionRef.current) {
-          lifted = await connectionRef.current
-            .write(asciiLine(penUpCommand))
-            .then(() => true)
+          lifted = await stopRobot(connectionRef.current, {
+            firmware: settings.firmware,
+            stopCommand: settings.stopCommand,
+            penUpLine: penUpCommand,
+          })
+            .then((steps) => {
+              addLog(`Stopped: ${steps.join(' → ')}`);
+              return true;
+            })
             .catch(() => false);
         }
         setJob({ state: 'cancelled', progress: last, penLifted: lifted });
@@ -264,11 +272,6 @@ export function RobotProvider({ children }: PropsWithChildren) {
       {children}
     </RobotContext.Provider>
   );
-}
-
-function asciiLine(command: string): Uint8Array {
-  const text = `${command}\n`;
-  return Uint8Array.from(text, (c) => (c.charCodeAt(0) < 128 ? c.charCodeAt(0) : 63));
 }
 
 export function useRobot() {

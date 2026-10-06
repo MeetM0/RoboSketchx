@@ -24,6 +24,10 @@ export const ATT_HEADER_BYTES = 3;
 export type AckMode = 'grbl' | 'line' | 'chunk' | 'none';
 
 export type RobotSettings = {
+  /** Controller type; decides how Cancel stops the machine (see stop.ts). */
+  firmware: 'grbl' | 'custom';
+  /** Custom firmware: command that stops motion and clears its queue, sent on Cancel. */
+  stopCommand: string;
   /** ATT MTU to request. The robot may negotiate a smaller one; the smaller value wins. */
   mtu: number;
   serviceUUID: string;
@@ -48,6 +52,8 @@ export const NORDIC_UART = {
 };
 
 export const DEFAULT_ROBOT_SETTINGS: RobotSettings = {
+  firmware: 'grbl',
+  stopCommand: '',
   mtu: 400,
   ...NORDIC_UART,
   ackMode: 'grbl',

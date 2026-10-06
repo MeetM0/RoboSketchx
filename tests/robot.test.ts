@@ -37,3 +37,46 @@ test('B1: a GRBL error reply stops the job', async () => {
   const robot = fakeGrbl({ failOn: /G1 Z/ });
   await assert.rejects(sendWithDefaults(robot), /error:22/);
 });
+
+test('B2: GRBL cancel = feed hold, soft reset, unlock, pen up — buffered moves never run', async () => {
+  const { stopRobot } = await import('../lib/robot/stop');
+  const robot = fakeGrbl({ lineMs: 15 });
+  let cancelled = false;
+  const sending = sendGcode(robot.transport, GCODE, {
+    payloadBytes: 397,
+    ackMode: 'none', // worst case: the robot's buffer is full of queued moves
+    ackToken: 'ok',
+    ackTimeoutMs: 2000,
+    isCancelled: () => cancelled,
+  }).catch(() => {});
+  await new Promise((r) => setTimeout(r, 60));
+  cancelled = true;
+  await sending;
+  const executedAtCancel = robot.executed.length;
+  const steps = await stopRobot(robot.transport, {
+    firmware: 'grbl',
+    stopCommand: '',
+    penUpLine: 'G0 Z5.00',
+  });
+  await new Promise((r) => setTimeout(r, 200));
+  const tail = robot.raw
+    .slice(-4)
+    .map((b) => (b.length === 1 ? `0x${b[0].toString(16)}` : String.fromCharCode(...b)));
+  console.log(
+    `  executed at cancel ${executedAtCancel}, after stop ${robot.executed.length} (${robot.executed.slice(executedAtCancel).join(' | ')}); last writes ${JSON.stringify(tail)}; steps ${JSON.stringify(steps)}`
+  );
+  assert.deepEqual(tail, ['0x21', '0x18', '$X\n', 'G0 Z5.00\n']);
+  assert.equal(robot.resets, 1);
+  // Only the unlock and pen-up ran after the stop — none of the buffered drawing moves.
+  assert.deepEqual(robot.executed.slice(executedAtCancel), ['$X', 'G0 Z5.00']);
+});
+
+test('B2: custom firmware cancel = stop command, then pen up', async () => {
+  const { stopRobot } = await import('../lib/robot/stop');
+  const robot = fakeGrbl();
+  await stopRobot(robot.transport, { firmware: 'custom', stopCommand: 'M0', penUpLine: 'M5' });
+  assert.deepEqual(
+    robot.raw.map((b) => String.fromCharCode(...b)),
+    ['M0\n', 'M5\n']
+  );
+});
