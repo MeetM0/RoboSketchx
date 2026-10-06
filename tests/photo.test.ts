@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import * as sk from '../lib/sketch';
-import { downscale, snoopScene } from './helpers/scenes';
+import { diskScene, downscale, snoopScene } from './helpers/scenes';
 
 const S = sk.DEFAULT_PLOTTER_SETTINGS;
 const USABLE = { w: S.paperWidthMm - 2 * S.marginMm, h: S.paperHeightMm - 2 * S.marginMm };
@@ -63,4 +63,32 @@ test('P1: the subject is cropped before resizing, so it gets the full 512 px', (
   );
   assert.ok(subjectPx >= 440, `subject only ${r2(subjectPx)} px`);
   assert.ok(mmPerPx <= 0.45, `${r2(mmPerPx)} mm/px`);
+});
+
+/** Share of segments within ±1° of 0°, 45°, 90° or 135° — pixel staircase leftovers. */
+function axisShare(strokes: { x: number; y: number }[][]) {
+  let n = 0;
+  let axis = 0;
+  for (const s of strokes) {
+    for (let i = 1; i < s.length; i++) {
+      const a = (Math.atan2(s[i].y - s[i - 1].y, s[i].x - s[i - 1].x) * 180) / Math.PI;
+      const m = ((a % 45) + 45) % 45;
+      n++;
+      if (m <= 1 || m >= 44) axis++;
+    }
+  }
+  return { segments: n, axis, share: n ? axis / n : 0 };
+}
+
+test('P3: traced chains are smoothed before simplification (axis/45° share < 20%)', () => {
+  const snoop = axisShare(photoSketch(snoopScene(768, 1024)).strokes);
+  // Reported only: a perfect circle is mirror-symmetric about the axes and diagonals, so its
+  // simplified chords land exactly on 0/45/90/135° where those tangents occur — geometry, not
+  // pixel staircase.
+  const disk = axisShare(photoSketch(diskScene()).strokes);
+  console.log(
+    `  snoop: ${snoop.axis}/${snoop.segments} segments axis-aligned or 45° = ${r2(snoop.share * 100)}%`
+  );
+  console.log(`  disk (reported only): ${disk.axis}/${disk.segments} = ${r2(disk.share * 100)}%`);
+  assert.ok(snoop.share < 0.2, `snoop: ${r2(snoop.share * 100)}%`);
 });

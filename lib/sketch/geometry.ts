@@ -115,3 +115,44 @@ export function joinStrokes(strokes: Polyline[], maxGap: number): Polyline[] {
   }
   return out;
 }
+
+/**
+ * Gaussian-smooths a traced pixel chain (σ in points; chains from the tracer have ~1 px
+ * spacing). Removes the 8-connected staircase so simplification keeps true directions instead
+ * of 0/45/90° steps. Open chains keep their end points; closed loops (ends within `closeGap`)
+ * wrap around and stay closed.
+ */
+export function smoothChain(chain: Polyline, sigma: number, closeGap = 1.5): Polyline {
+  const n = chain.length;
+  if (n < 3 || sigma <= 0) return chain;
+  const closed = dist(chain[0], chain[n - 1]) <= closeGap;
+  // A closed loop repeats its first point at the end; smooth the unique points.
+  const points = closed && dist(chain[0], chain[n - 1]) === 0 ? chain.slice(0, -1) : chain;
+  const m = points.length;
+  const radius = Math.min(Math.ceil(sigma * 3), closed ? Math.floor((m - 1) / 2) : m);
+  const weights = Array.from({ length: radius + 1 }, (_, k) =>
+    Math.exp(-(k * k) / (2 * sigma * sigma))
+  );
+  const out: Polyline = [];
+  for (let i = 0; i < m; i++) {
+    if (!closed && (i === 0 || i === m - 1)) {
+      out.push(points[i]);
+      continue;
+    }
+    let x = 0;
+    let y = 0;
+    let total = 0;
+    for (let k = -radius; k <= radius; k++) {
+      let j = i + k;
+      if (closed) j = (j + m) % m;
+      else if (j < 0 || j >= m) continue;
+      const w = weights[Math.abs(k)];
+      x += points[j].x * w;
+      y += points[j].y * w;
+      total += w;
+    }
+    out.push({ x: x / total, y: y / total });
+  }
+  if (closed) out.push({ ...out[0] });
+  return out;
+}

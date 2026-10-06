@@ -1,3 +1,13 @@
+/** Edge map plus the gradient field it came from (for sub-pixel refinement). */
+export type EdgeField = {
+  edges: Uint8Array;
+  magnitude: Float32Array;
+  gx: Float32Array;
+  gy: Float32Array;
+  width: number;
+  height: number;
+};
+
 /**
  * Canny edge detection on a raw RGBA buffer.
  * Returns a 1-pixel-wide binary edge map (1 = edge) of size width * height.
@@ -11,16 +21,66 @@ export function detectEdges(
   weakRatio: number,
   minContrast: number
 ): Uint8Array {
+  return detectEdgeField(rgba, width, height, blurSigma, strongEdgeFraction, weakRatio, minContrast)
+    .edges;
+}
+
+export function detectEdgeField(
+  rgba: Uint8Array,
+  width: number,
+  height: number,
+  blurSigma: number,
+  strongEdgeFraction: number,
+  weakRatio: number,
+  minContrast: number
+): EdgeField {
   const gray = toGrayscale(rgba, width, height);
   const blurred = blurSigma > 0 ? gaussianBlur(gray, width, height, blurSigma) : gray;
-  const { magnitude, direction } = sobel(blurred, width, height);
+  const { magnitude, direction, gx, gy } = sobel(blurred, width, height);
   const thin = nonMaxSuppression(magnitude, direction, width, height);
   // Sobel responds with 8x the local slope; a step of `minContrast` grey levels blurred by
   // a Gaussian has a peak slope of minContrast / (sqrt(2π)·σ). Anything weaker is treated as
   // texture/noise even if it ranks highly, which keeps flat, noisy backgrounds blank.
   const floor = (8 * minContrast) / (Math.sqrt(2 * Math.PI) * Math.max(blurSigma, 0.5));
   const high = Math.max(floor, strengthThreshold(thin, strongEdgeFraction));
-  return hysteresis(thin, width, height, high, high * weakRatio);
+  const edges = hysteresis(thin, width, height, high, high * weakRatio);
+  return { edges, magnitude, gx, gy, width, height };
+}
+
+/**
+ * Moves each traced edge pixel to the sub-pixel peak of the gradient magnitude along the
+ * gradient direction (parabola through three samples). Canny edges sit on whole pixels, so
+ * long gentle curves come out as exact axis-aligned runs; this restores their true shape.
+ */
+export function refineSubpixel(chain: { x: number; y: number }[], field: EdgeField) {
+  const { magnitude, gx, gy, width, height } = field;
+  const sample = (x: number, y: number) => {
+    const cx = Math.min(width - 1.001, Math.max(0, x));
+    const cy = Math.min(height - 1.001, Math.max(0, y));
+    const x0 = Math.floor(cx);
+    const y0 = Math.floor(cy);
+    const tx = cx - x0;
+    const ty = cy - y0;
+    const i = y0 * width + x0;
+    return (
+      (magnitude[i] * (1 - tx) + magnitude[i + 1] * tx) * (1 - ty) +
+      (magnitude[i + width] * (1 - tx) + magnitude[i + width + 1] * tx) * ty
+    );
+  };
+  return chain.map((p) => {
+    const i = Math.round(p.y) * width + Math.round(p.x);
+    const g = Math.hypot(gx[i], gy[i]);
+    if (!g) return p;
+    const nx = gx[i] / g;
+    const ny = gy[i] / g;
+    const before = sample(p.x - nx, p.y - ny);
+    const here = magnitude[i];
+    const after = sample(p.x + nx, p.y + ny);
+    const denominator = before - 2 * here + after;
+    if (denominator >= 0) return p; // not a peak
+    const t = Math.max(-0.5, Math.min(0.5, (before - after) / (2 * denominator)));
+    return { x: p.x + t * nx, y: p.y + t * ny };
+  });
 }
 
 function toGrayscale(rgba: Uint8Array, width: number, height: number): Float32Array {
@@ -75,6 +135,8 @@ export function gaussianBlur(src: Float32Array, width: number, height: number, s
 
 function sobel(src: Float32Array, width: number, height: number) {
   const magnitude = new Float32Array(src.length);
+  const gxs = new Float32Array(src.length);
+  const gys = new Float32Array(src.length);
   // Gradient direction quantised to 0 (horizontal), 1 (45°), 2 (vertical), 3 (135°).
   const direction = new Uint8Array(src.length);
   for (let y = 1; y < height - 1; y++) {
@@ -91,12 +153,14 @@ function sobel(src: Float32Array, width: number, height: number) {
       const gx = tr + 2 * r + br - tl - 2 * l - bl;
       const gy = bl + 2 * b + br - tl - 2 * t - tr;
       magnitude[i] = Math.hypot(gx, gy);
+      gxs[i] = gx;
+      gys[i] = gy;
       let angle = (Math.atan2(gy, gx) * 180) / Math.PI;
       if (angle < 0) angle += 180;
       direction[i] = angle < 22.5 || angle >= 157.5 ? 0 : angle < 67.5 ? 1 : angle < 112.5 ? 2 : 3;
     }
   }
-  return { magnitude, direction };
+  return { magnitude, direction, gx: gxs, gy: gys };
 }
 
 function nonMaxSuppression(

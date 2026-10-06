@@ -298,8 +298,7 @@ function floodFromBorder(
       // Join if the colour matches the background model, or if it continues a smooth
       // gradient (shadows, vignetting) without straying too far from the model.
       const matches =
-        bgScore[n] < 1 ||
-        (bgScore[n] < GRADIENT_REACH && pixelDistance(lab, i, n) < GRADIENT_STEP);
+        bgScore[n] < 1 || (bgScore[n] < GRADIENT_REACH && pixelDistance(lab, i, n) < GRADIENT_STEP);
       if (matches) {
         visited[n] = 1;
         queue[tail++] = n;
@@ -359,4 +358,3 @@ export function backgroundPathData(mask: Uint8Array, width: number, height: numb
   }
   return parts.join('');
 }
-

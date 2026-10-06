@@ -1,7 +1,7 @@
 import { decode } from 'jpeg-js';
 
-import { detectEdges } from './edges';
-import { orderStrokes, polylineLength, simplify } from './geometry';
+import { detectEdgeField, refineSubpixel } from './edges';
+import { orderStrokes, polylineLength, simplify, smoothChain } from './geometry';
 import { traceEdges } from './trace';
 import type { DetailLevel, RgbaImage, Sketch, SketchOptions } from './types';
 
@@ -23,6 +23,9 @@ export {
 } from './photo';
 export { computeStats, joinStrokes } from './geometry';
 export * from './types';
+
+/** Gaussian σ (in traced pixels) used to smooth pixel chains before simplification. */
+export const CHAIN_SMOOTHING_SIGMA_PX = 1.25;
 
 export const DETAIL_PRESETS: Record<DetailLevel, SketchOptions> = {
   low: {
@@ -53,7 +56,7 @@ export const DETAIL_PRESETS: Record<DetailLevel, SketchOptions> = {
 
 /** Converts an image into ordered pen strokes. */
 export function imageToSketch({ data, width, height }: RgbaImage, options: SketchOptions): Sketch {
-  const edges = detectEdges(
+  const field = detectEdgeField(
     data,
     width,
     height,
@@ -62,9 +65,14 @@ export function imageToSketch({ data, width, height }: RgbaImage, options: Sketc
     options.weakRatio,
     options.minContrast
   );
-  const strokes = traceEdges(edges, width, height)
+  const strokes = traceEdges(field.edges, width, height)
     .filter((s) => s.length > 1 && polylineLength(s) >= options.minStrokeLength)
-    .map((s) => simplify(s, options.simplifyTolerance));
+    .map((s) =>
+      simplify(
+        smoothChain(refineSubpixel(s, field), CHAIN_SMOOTHING_SIGMA_PX),
+        options.simplifyTolerance
+      )
+    );
   // Machine X0 Y0 is the bottom-left of the paper: bottom-left of the image.
   return { width, height, strokes: orderStrokes(strokes, { x: 0, y: height }) };
 }
