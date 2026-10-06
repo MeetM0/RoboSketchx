@@ -1,7 +1,14 @@
 import { decode } from 'jpeg-js';
 
 import { detectEdgeField, refineSubpixel } from './edges';
-import { orderStrokes, polylineLength, simplify, smoothChain } from './geometry';
+import {
+  dropRedundantChains,
+  linkChains,
+  orderStrokes,
+  polylineLength,
+  simplify,
+  smoothChain,
+} from './geometry';
 import { traceEdges } from './trace';
 import type { DetailLevel, RgbaImage, Sketch, SketchOptions } from './types';
 
@@ -23,6 +30,12 @@ export {
 } from './photo';
 export { computeStats, joinStrokes } from './geometry';
 export * from './types';
+
+/** Chain ends this close (traced px) that continue each other are joined into one line. */
+export const LINK_GAP_PX = 2.5;
+export const LINK_MAX_ANGLE_DEG = 45;
+/** Chains entirely within this distance (traced px) of a longer chain are duplicates. */
+export const REDUNDANT_TOLERANCE_PX = 1.5;
 
 /** Gaussian σ (in traced pixels) used to smooth pixel chains before simplification. */
 export const CHAIN_SMOOTHING_SIGMA_PX = 1.25;
@@ -65,7 +78,11 @@ export function imageToSketch({ data, width, height }: RgbaImage, options: Sketc
     options.weakRatio,
     options.minContrast
   );
-  const strokes = traceEdges(field.edges, width, height)
+  const traced = dropRedundantChains(
+    linkChains(traceEdges(field.edges, width, height), LINK_GAP_PX, LINK_MAX_ANGLE_DEG),
+    REDUNDANT_TOLERANCE_PX
+  );
+  const strokes = traced
     .filter((s) => s.length > 1 && polylineLength(s) >= options.minStrokeLength)
     .map((s) =>
       simplify(
