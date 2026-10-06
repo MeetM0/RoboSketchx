@@ -88,9 +88,11 @@ the export.
    strokes nearest-neighbour from the origin to cut pen-up travel.
 6. **Plot** (`export.ts` → `planPlot`): fit the strokes inside the paper margins in machine
    millimetres (Y flipped, X0 Y0 = bottom-left), **join strokes whose ends are within 0.3 mm**
-   so the pen doesn't lift and re-land on the same spot, and add the finishing move (nearest
-   paper corner by default; or stay; or X0 Y0). G-code export and the stroke / time summary
-   both use this plan. Strokes are ordered nearest-neighbour starting from X0 Y0.
+   so the pen doesn't lift and re-land on the same spot, and park at the configured position.
+   G-code export and the stroke / time summary both use this plan.
+7. **G-code** (`sketchToGcode`): `G21`, `G90`, start position (`G92 X0 Y0` / `G28` / `$H`), then
+   per stroke `G0 X Y` (no F on rapids), pen down `G1 Z<down> F<pen>` (or custom servo
+   commands), `G1 … F<draw>`, pen up `G0 Z<up>`; finally pen up → park `G0` → `M2`.
 
 Detail presets live in `DETAIL_PRESETS` in `lib/sketch/index.ts`.
 

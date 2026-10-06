@@ -22,12 +22,6 @@ const PEN_MODE_OPTIONS = [
   { value: 'custom', label: 'Custom commands' },
 ] as const;
 
-const FINISH_OPTIONS = [
-  { value: 'corner', label: 'Nearest corner' },
-  { value: 'stay', label: 'Stay' },
-  { value: 'origin', label: 'X0 Y0' },
-] as const;
-
 const PAPER_PRESETS = [
   { label: 'A4', width: 210, height: 297 },
   { label: 'A5', width: 148, height: 210 },
@@ -138,12 +132,25 @@ export default function PlotterScreen() {
 
           <Section
             title="When finished"
-            hint="Where the pen goes after drawing. Nearest corner is a short move that clears the drawing; X0 Y0 returns home, which can mean a trip across the whole page.">
-            <SegmentedControl
-              options={FINISH_OPTIONS}
-              value={settings.finishAt}
-              onChange={(finishAt) => updateSettings({ finishAt })}
-            />
+            hint="After the last stroke the pen lifts, moves here and the program ends (M2). Machine coordinates: X0 Y0 is the paper's bottom-left corner.">
+            <View style={styles.row}>
+              <NumberField
+                label="Park X"
+                unit="mm"
+                value={settings.parkXMm}
+                min={0}
+                max={settings.paperWidthMm}
+                onCommit={(parkXMm) => updateSettings({ parkXMm })}
+              />
+              <NumberField
+                label="Park Y"
+                unit="mm"
+                value={settings.parkYMm}
+                min={0}
+                max={settings.paperHeightMm}
+                onCommit={(parkYMm) => updateSettings({ parkYMm })}
+              />
+            </View>
           </Section>
 
           <Section

@@ -51,8 +51,8 @@ Ready-made G-code for the pictures in the app's **Draw → Catalog** tab. Genera
 
 These files use the app's default plotter settings: A4 portrait (${settings.paperWidthMm}×${settings.paperHeightMm} mm),
 ${settings.marginMm} mm margin, drawing at ${settings.drawFeedRate} mm/min, travel at ${settings.travelFeedRate} mm/min,
-pen up \`${penUpLine(settings)}\`, pen down \`${penDownLine(settings)}\`, parking at the
-nearest paper corner when done. If your robot is different,
+pen up \`${penUpLine(settings)}\`, pen down \`${penDownLine(settings)}\`, parking at
+X${settings.parkXMm} Y${settings.parkYMm} and ending with M2. If your robot is different,
 export from the app instead — it uses your Plotter settings.
 
 | Preview | Picture | Category | Strokes | Size | Time | G-code |

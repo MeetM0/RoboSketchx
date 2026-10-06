@@ -5,8 +5,8 @@ Ready-made G-code for the pictures in the app's **Draw → Catalog** tab. Genera
 
 These files use the app's default plotter settings: A4 portrait (210×297 mm),
 10 mm margin, drawing at 1500 mm/min, travel at 3000 mm/min,
-pen up `G0 Z5.00`, pen down `G1 Z0.00 F500`, parking at the
-nearest paper corner when done. If your robot is different,
+pen up `G0 Z5.00`, pen down `G1 Z0.00 F500`, parking at
+X0 Y0 and ending with M2. If your robot is different,
 export from the app instead — it uses your Plotter settings.
 
 | Preview | Picture | Category | Strokes | Size | Time | G-code |

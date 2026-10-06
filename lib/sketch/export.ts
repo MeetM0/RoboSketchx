@@ -36,14 +36,9 @@ export type PlotterSettings = {
    * - `home` — `$H`: GRBL homing cycle (needs homing switches).
    */
   startMode: 'g92' | 'g28' | 'home';
-  /**
-   * Where the pen goes when the drawing is done:
-   * - `corner` — the paper corner nearest to the last stroke (short move, keeps the pen
-   *   off the drawing);
-   * - `stay`   — stay where the last stroke ended;
-   * - `origin` — back to X0 Y0.
-   */
-  finishAt: 'corner' | 'stay' | 'origin';
+  /** Where the pen parks when the job ends (machine coordinates, mm). */
+  parkXMm: number;
+  parkYMm: number;
 };
 
 export const DEFAULT_PLOTTER_SETTINGS: PlotterSettings = {
@@ -59,7 +54,8 @@ export const DEFAULT_PLOTTER_SETTINGS: PlotterSettings = {
   penUpCommand: 'M5',
   penDownCommand: 'M3 S90',
   startMode: 'g92',
-  finishAt: 'corner',
+  parkXMm: 0,
+  parkYMm: 0,
 };
 
 /** Strokes whose ends are this close on paper are drawn as one, without lifting the pen. */
@@ -106,8 +102,8 @@ export function pixelToPaperTransform(sketch: Sketch, settings: PlotterSettings)
 export type PlotPlan = {
   /** Pen-down strokes in paper millimetres (machine coordinates, y up), in drawing order. */
   strokes: Polyline[];
-  /** Where the pen parks afterwards; null to stay put. */
-  park: Point | null;
+  /** Where the pen parks afterwards (the configured park position). */
+  park: Point;
   strokeCount: number;
   drawLengthMm: number;
   /** Pen-up travel from X0 Y0 to the first stroke, between strokes, and to the park spot. */
@@ -126,20 +122,8 @@ export function planPlot(sketch: Sketch, settings: PlotterSettings): PlotPlan {
     sketch.strokes.map((s) => s.map(toPaper)),
     JOIN_GAP_MM
   );
-  const last = strokes.length ? strokes[strokes.length - 1] : null;
-  const end = last ? last[last.length - 1] : { x: 0, y: 0 };
-
-  let park: Point | null = null;
-  if (settings.finishAt === 'origin') park = { x: 0, y: 0 };
-  else if (settings.finishAt === 'corner' && last) {
-    const corners = [
-      { x: 0, y: 0 },
-      { x: settings.paperWidthMm, y: 0 },
-      { x: 0, y: settings.paperHeightMm },
-      { x: settings.paperWidthMm, y: settings.paperHeightMm },
-    ];
-    park = corners.reduce((best, c) => (distance(end, c) < distance(end, best) ? c : best));
-  }
+  // Always the configured spot: never derived from the layout or the last stroke.
+  const park: Point = { x: settings.parkXMm, y: settings.parkYMm };
 
   let drawLengthMm = 0;
   let travelLengthMm = 0;
@@ -149,7 +133,7 @@ export function planPlot(sketch: Sketch, settings: PlotterSettings): PlotPlan {
     drawLengthMm += polylineLength(stroke);
     pen = stroke[stroke.length - 1];
   }
-  if (park) travelLengthMm += distance(pen, park);
+  travelLengthMm += distance(pen, park);
 
   return {
     strokes,
@@ -186,7 +170,7 @@ export function rulesFor(settings: PlotterSettings): ValidationRules {
     paperWidthMm: settings.paperWidthMm,
     paperHeightMm: settings.paperHeightMm,
     marginMm: settings.marginMm,
-    park: { x: 0, y: 0 },
+    park: { x: settings.parkXMm, y: settings.parkYMm },
     pen:
       settings.penMode === 'z'
         ? { mode: 'z', upZ: settings.penUpZ, downZ: settings.penDownZ }
@@ -221,7 +205,7 @@ export function sketchToGcode(sketch: Sketch, settings: PlotterSettings): string
     );
     lines.push(penUpLine(settings));
   }
-  if (plan.park) lines.push(`G0 ${fmt(plan.park)}`);
+  lines.push(`G0 ${fmt(plan.park)}`);
   lines.push('M2 ; end of program', '');
   return lines.join('\n');
 }

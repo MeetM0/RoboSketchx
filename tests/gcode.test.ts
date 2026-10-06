@@ -77,3 +77,28 @@ test('G2: header declares units, absolute mode and start position; footer ends w
     );
   }
 });
+
+test('G3: park is the configured position, never derived from the last stroke', () => {
+  const endsBottomLeft: Sketch = {
+    ...SKETCH,
+    strokes: [SKETCH.strokes[1], SKETCH.strokes[0]].map((s) => [...s].reverse()),
+  };
+  for (const park of [undefined, { parkXMm: 30, parkYMm: 40 }]) {
+    const settings = { ...DEFAULT_PLOTTER_SETTINGS, ...park };
+    const parks = [SKETCH, endsBottomLeft].map((sketch) => {
+      const gcode = sketchToGcode(sketch, settings);
+      const commands = gcode
+        .split('\n')
+        .map((l) => l.replace(/;.*$/, '').trim())
+        .filter(Boolean);
+      assert.deepEqual(
+        validateGcode(gcode, rulesFor(settings)).filter((i) => i.invariant === 4),
+        []
+      );
+      return commands[commands.length - 2];
+    });
+    console.log(`  park ${JSON.stringify(park ?? 'default')}: ${JSON.stringify(parks)}`);
+    assert.equal(parks[0], parks[1]);
+    assert.equal(parks[0], park ? 'G0 X30.00 Y40.00' : 'G0 X0.00 Y0.00');
+  }
+});
