@@ -7,13 +7,7 @@ import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { usePlotterSettings } from '@/lib/plotter-settings';
 import { shareTextFile } from '@/lib/share-file';
-import {
-  computeStats,
-  pixelToPaperTransform,
-  sketchToGcode,
-  sketchToSvg,
-  type Sketch,
-} from '@/lib/sketch';
+import { planPlot, sketchToGcode, sketchToSvg, type Sketch } from '@/lib/sketch';
 
 type Props = {
   sketch: Sketch | null;
@@ -71,18 +65,13 @@ export function SketchActions({ sketch, disabled, fileName, onError }: Props) {
 function SketchSummary({ sketch }: { sketch: Sketch }) {
   const colors = Colors[useColorScheme() ?? 'light'];
   const { settings } = usePlotterSettings();
-  const stats = computeStats(sketch.strokes);
-  const { scale } = pixelToPaperTransform(sketch, settings);
-  const minutes =
-    (stats.drawLength * scale) / settings.drawFeedRate +
-    (stats.travelLength * scale) / settings.travelFeedRate;
-
-  // Size of what actually gets drawn (the sketch canvas can be larger, e.g. a whole page).
+  // Exactly what the robot will do: joined strokes, paper millimetres, finishing move.
+  const plan = planPlot(sketch, settings);
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
   let maxY = -Infinity;
-  for (const stroke of sketch.strokes) {
+  for (const stroke of plan.strokes) {
     for (const p of stroke) {
       minX = Math.min(minX, p.x);
       minY = Math.min(minY, p.y);
@@ -90,12 +79,11 @@ function SketchSummary({ sketch }: { sketch: Sketch }) {
       maxY = Math.max(maxY, p.y);
     }
   }
-  const size = stats.strokeCount
-    ? `${Math.round((maxX - minX) * scale)}×${Math.round((maxY - minY) * scale)} mm`
-    : '—';
+  const size = plan.strokeCount ? `${Math.round(maxX - minX)}×${Math.round(maxY - minY)} mm` : '—';
+  const minutes = plan.minutes;
 
   const items = [
-    { label: 'Strokes', value: stats.strokeCount.toLocaleString() },
+    { label: 'Strokes', value: plan.strokeCount.toLocaleString() },
     { label: 'Drawing size', value: size },
     { label: 'Est. time', value: minutes < 1 ? '< 1 min' : `≈ ${Math.round(minutes)} min` },
   ];

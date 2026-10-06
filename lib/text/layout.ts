@@ -1,3 +1,4 @@
+import { JOIN_GAP_MM } from '../sketch/export';
 import type { Point, Polyline, Sketch } from '../sketch/types';
 
 import { FONT_DATA } from './font-data';
@@ -11,8 +12,11 @@ export const FONTS: { id: FontId; label: string }[] = (Object.keys(FONT_DATA) as
 
 export type TextLayoutOptions = {
   font: FontId;
-  /** Height of a capital letter, in millimetres. */
-  letterHeightMm: number;
+  /**
+   * Height of a capital letter in millimetres, or `fit` to make the longest line fill the
+   * width of the writing area (never taller than `MAX_FIT_LETTER_HEIGHT_MM`).
+   */
+  letterHeightMm: number | 'fit';
   /** Multiple of the font's natural line height. */
   lineSpacing: number;
   align: 'left' | 'center';
@@ -27,7 +31,15 @@ export type TextLayout = {
   overflowLines: number;
   /** Characters the font has no glyph for (skipped). */
   missingChars: string[];
+  /** Capital-letter height actually used (resolves `fit`), in millimetres. */
+  letterHeightMm: number;
+  /** Height of lowercase letters such as x, in millimetres. */
+  xHeightMm: number;
 };
+
+/** "Fit width" never makes capitals taller than this, so a single word doesn't fill the page. */
+export const MAX_FIT_LETTER_HEIGHT_MM = 25;
+const DEFAULT_LETTER_HEIGHT_MM = 8;
 
 type Word = { chars: string[]; width: number };
 
@@ -43,7 +55,11 @@ export function layoutText(
 ): TextLayout {
   const font: StrokeFont = FONT_DATA[options.font];
   const { metrics } = font;
-  const scale = options.letterHeightMm / metrics.capHeight;
+  const letterHeightMm =
+    options.letterHeightMm === 'fit'
+      ? fitLetterHeight(text, area, font, options.lineSpacing)
+      : options.letterHeightMm;
+  const scale = letterHeightMm / metrics.capHeight;
   const lineHeight = (metrics.ascent - metrics.descent) * scale * options.lineSpacing;
   const spaceWidth = (font.glyphs[' ']?.[0] ?? metrics.unitsPerEm * 0.3) * scale;
   const missing = new Set<string>();
@@ -76,6 +92,10 @@ export function layoutText(
 
   const random = seededRandom(hash(text));
   const strokes: Polyline[] = [];
+  // Where the previous stroke ended, before and after the per-letter variation. Cursive
+  // letters join end-to-start; the variation must not pull those joins apart.
+  let lastRawEnd: Point | null = null;
+  let lastEnd: Point | null = null;
   let overflowLines = 0;
   lines.forEach((line, index) => {
     const baseline = metrics.ascent * scale + index * lineHeight;
@@ -99,7 +119,7 @@ export function layoutText(
         // Per-letter variation, pivoting around the letter's centre on the baseline.
         const tilt = options.natural ? (random() - 0.5) * 0.06 : 0;
         const size = options.natural ? 1 + (random() - 0.5) * 0.06 : 1;
-        const lift = options.natural ? (random() - 0.5) * 0.05 * options.letterHeightMm : 0;
+        const lift = options.natural ? (random() - 0.5) * 0.05 * letterHeightMm : 0;
         const pivotX = x + (advance * scale) / 2;
         const cos = Math.cos(tilt);
         const sin = Math.sin(tilt);
@@ -113,8 +133,21 @@ export function layoutText(
               y: baseline + lift + dx * sin + dy * cos,
             });
           }
+          const rawStart = { x: x + flat[0] * scale, y: baseline - flat[1] * scale };
+          const n = flat.length;
+          const rawEnd = { x: x + flat[n - 2] * scale, y: baseline - flat[n - 1] * scale };
+          if (
+            lastRawEnd &&
+            lastEnd &&
+            Math.hypot(rawStart.x - lastRawEnd.x, rawStart.y - lastRawEnd.y) <= JOIN_GAP_MM
+          ) {
+            // This stroke continues the previous one: start exactly where it ended.
+            stroke[0] = { ...lastEnd };
+          }
           // A single point is a dot (e.g. a full stop): touch the pen down once.
           strokes.push(stroke.length === 1 ? [stroke[0], stroke[0]] : stroke);
+          lastRawEnd = rawEnd;
+          lastEnd = stroke[stroke.length - 1];
         }
         x += advance * scale;
       }
@@ -125,7 +158,47 @@ export function layoutText(
     sketch: { width: area.widthMm, height: area.heightMm, strokes },
     overflowLines,
     missingChars: [...missing].filter((c) => c.trim()),
+    letterHeightMm,
+    xHeightMm: metrics.xHeight * scale,
   };
+}
+
+/**
+ * Largest capital height at which every paragraph fits on one line and all lines fit the
+ * area's height, capped at `MAX_FIT_LETTER_HEIGHT_MM`.
+ */
+function fitLetterHeight(
+  text: string,
+  area: { widthMm: number; heightMm: number },
+  font: StrokeFont,
+  lineSpacing: number
+): number {
+  const { metrics } = font;
+  const paragraphs = text.replace(/\r\n?/g, '\n').split('\n');
+  const space = font.glyphs[' ']?.[0] ?? metrics.unitsPerEm * 0.3;
+  // Widths in font units, as laid out (single spaces between words).
+  const widest = Math.max(
+    0,
+    ...paragraphs.map((p) =>
+      p
+        .split(/ +/)
+        .filter(Boolean)
+        .reduce(
+          (sum, word, i) =>
+            sum + (i ? space : 0) + [...word].reduce((w, c) => w + (font.glyphs[c]?.[0] ?? 0), 0),
+          0
+        )
+    )
+  );
+  if (widest === 0) return DEFAULT_LETTER_HEIGHT_MM;
+  // 2% slack for letters that reach past their advance width.
+  const byWidth = (area.widthMm * 0.98 * metrics.capHeight) / widest;
+  const linesHeight =
+    metrics.ascent -
+    metrics.descent +
+    (paragraphs.length - 1) * (metrics.ascent - metrics.descent) * lineSpacing;
+  const byHeight = (area.heightMm * metrics.capHeight) / linesHeight;
+  return Math.max(1, Math.min(MAX_FIT_LETTER_HEIGHT_MM, byWidth, byHeight));
 }
 
 /** Splits a paragraph into words, breaking any word wider than the line into pieces. */

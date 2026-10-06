@@ -44,13 +44,14 @@ function distanceToSegment(p: Point, a: Point, b: Point): number {
 }
 
 /**
- * Greedy nearest-neighbour ordering starting from the origin (where a plotter homes).
+ * Greedy nearest-neighbour ordering starting from `start` — pass where the plotter homes
+ * (machine X0 Y0 is the paper's bottom-left, i.e. `{ x: 0, y: height }` in image space).
  * Strokes may be reversed so the pen starts at whichever end is closer.
  */
-export function orderStrokes(strokes: Polyline[]): Polyline[] {
+export function orderStrokes(strokes: Polyline[], start: Point): Polyline[] {
   const remaining = strokes.slice();
   const ordered: Polyline[] = [];
-  let pen: Point = { x: 0, y: 0 };
+  let pen: Point = start;
   while (remaining.length) {
     let bestIndex = 0;
     let bestReversed = false;
@@ -90,4 +91,27 @@ export function computeStats(strokes: Polyline[]): SketchStats {
     pen = s[s.length - 1];
   }
   return { strokeCount: strokes.length, pointCount, drawLength, travelLength };
+}
+
+/**
+ * Joins consecutive strokes when one ends within `maxGap` of where the next begins, so the
+ * pen stays down through the join instead of lifting and landing on the same spot (which
+ * wastes time and leaves an ink blob, e.g. at every cursive letter connection).
+ */
+export function joinStrokes(strokes: Polyline[], maxGap: number): Polyline[] {
+  const out: Polyline[] = [];
+  for (const stroke of strokes) {
+    const previous = out[out.length - 1];
+    if (previous) {
+      const end = previous[previous.length - 1];
+      const gap = dist(end, stroke[0]);
+      if (gap <= maxGap) {
+        // Skip the duplicate point when the ends coincide exactly.
+        previous.push(...(gap === 0 ? stroke.slice(1) : stroke));
+        continue;
+      }
+    }
+    out.push(stroke.slice());
+  }
+  return out;
 }

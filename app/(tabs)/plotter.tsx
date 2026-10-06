@@ -4,11 +4,18 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '@/components/button';
 import { NumberField, Section, TextField } from '@/components/form-fields';
 import { RobotPanel } from '@/components/robot-panel';
+import { SegmentedControl } from '@/components/segmented-control';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { usePlotterSettings } from '@/lib/plotter-settings';
+
+const FINISH_OPTIONS = [
+  { value: 'corner', label: 'Nearest corner' },
+  { value: 'stay', label: 'Stay' },
+  { value: 'origin', label: 'X0 Y0' },
+] as const;
 
 const PAPER_PRESETS = [
   { label: 'A4', width: 210, height: 297 },
@@ -106,6 +113,16 @@ export default function PlotterScreen() {
                 onCommit={(travelFeedRate) => updateSettings({ travelFeedRate })}
               />
             </View>
+          </Section>
+
+          <Section
+            title="When finished"
+            hint="Where the pen goes after drawing. Nearest corner is a short move that clears the drawing; X0 Y0 returns home, which can mean a trip across the whole page.">
+            <SegmentedControl
+              options={FINISH_OPTIONS}
+              value={settings.finishAt}
+              onChange={(finishAt) => updateSettings({ finishAt })}
+            />
           </Section>
 
           <Section

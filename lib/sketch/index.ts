@@ -7,7 +7,7 @@ import type { DetailLevel, RgbaImage, Sketch, SketchOptions } from './types';
 
 export { applyMask, backgroundPathData, removeBackground, type BackgroundRemoval } from './background';
 export * from './export';
-export { computeStats } from './geometry';
+export { computeStats, joinStrokes } from './geometry';
 export * from './types';
 
 export const DETAIL_PRESETS: Record<DetailLevel, SketchOptions> = {
@@ -54,7 +54,8 @@ export function imageToSketch(
   const strokes = traceEdges(edges, width, height)
     .filter((s) => s.length > 1 && polylineLength(s) >= options.minStrokeLength)
     .map((s) => simplify(s, options.simplifyTolerance));
-  return { width, height, strokes: orderStrokes(strokes) };
+  // Machine X0 Y0 is the bottom-left of the paper: bottom-left of the image.
+  return { width, height, strokes: orderStrokes(strokes, { x: 0, y: height }) };
 }
 
 /** Decodes a base64-encoded JPEG into RGBA pixels. */

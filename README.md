@@ -7,8 +7,8 @@ Turn photos and text into pen strokes that a drawing robot / pen plotter can dra
 - **Draw → My photo:** take or choose a photo; RoboSketch removes the background and traces the
   subject's outlines (pick **Low / Medium / High** detail).
 - **Write:** type a message and pick a single-stroke font (Print, Handwriting, Cursive,
-  Calligraphy), size and alignment; "Natural" adds slight per-letter variation so it looks
-  hand-written.
+  Calligraphy), size (**Fit width** by default, or Small / Medium / Large / a custom height in
+  mm) and alignment; "Natural" adds slight per-letter variation so it looks hand-written.
 
 Every mode previews the result on your sheet of paper, **sends the G-code to the robot over
 Bluetooth LE**, or exports **G-code** / **SVG** files.
@@ -86,8 +86,11 @@ the export.
 4. **Trace** connected edge pixels into polylines (`trace.ts`), starting at line ends.
 5. **Clean up** (`geometry.ts`): drop short strokes, simplify with Ramer–Douglas–Peucker, and order
    strokes nearest-neighbour from the origin to cut pen-up travel.
-6. **Export** (`export.ts`): SVG, or G-code fitted inside the paper margins (Y flipped for the
-   machine, pen up/down commands and feed rates from the Plotter settings).
+6. **Plot** (`export.ts` → `planPlot`): fit the strokes inside the paper margins in machine
+   millimetres (Y flipped, X0 Y0 = bottom-left), **join strokes whose ends are within 0.3 mm**
+   so the pen doesn't lift and re-land on the same spot, and add the finishing move (nearest
+   paper corner by default; or stay; or X0 Y0). G-code export and the stroke / time summary
+   both use this plan. Strokes are ordered nearest-neighbour starting from X0 Y0.
 
 Detail presets live in `DETAIL_PRESETS` in `lib/sketch/index.ts`.
 
@@ -97,7 +100,10 @@ Plotters need **single-stroke** fonts: each letter is a few pen paths rather tha
 to fill. RoboSketch ships four from the Hershey / EMS engraving fonts (licences in
 `lib/text/FONTS-LICENSE.md`). `layoutText` wraps words to the paper's writing area, splits
 over-long words, reports lines that don't fit and characters the font lacks, and keeps strokes
-in writing order.
+in writing order. "Fit width" picks the capital height at which the longest line fills the
+page width (capped at 25 mm, and shrunk if the lines wouldn't fit the page height). Cursive
+letters connect end-to-start; those joins are kept exact even with "Natural" variation, so the
+plot pass draws each connected run as one pen-down stroke.
 
 ## Sending to the robot over Bluetooth LE (`lib/robot`)
 

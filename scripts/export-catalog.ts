@@ -12,10 +12,9 @@ import { mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
 import { CATALOG, pictureToSketch } from '../lib/catalog';
-import { computeStats } from '../lib/sketch/geometry';
 import {
   DEFAULT_PLOTTER_SETTINGS,
-  pixelToPaperTransform,
+  planPlot,
   sketchToGcode,
   sketchToSvg,
 } from '../lib/sketch/export';
@@ -30,15 +29,14 @@ for (const picture of CATALOG) {
   writeFileSync(join(outDir, `${picture.id}.gcode`), sketchToGcode(sketch, settings));
   writeFileSync(join(outDir, `${picture.id}.svg`), sketchToSvg(sketch));
 
-  const { scale } = pixelToPaperTransform(sketch, settings);
-  const stats = computeStats(sketch.strokes);
-  const minutes =
-    (stats.drawLength * scale) / settings.drawFeedRate +
-    (stats.travelLength * scale) / settings.travelFeedRate;
+  const plan = planPlot(sketch, settings);
+  const xs = plan.strokes.flat().map((p) => p.x);
+  const ys = plan.strokes.flat().map((p) => p.y);
+  const size = `${Math.round(Math.max(...xs) - Math.min(...xs))}×${Math.round(Math.max(...ys) - Math.min(...ys))} mm`;
   rows.push(
     `| ![${picture.name}](${picture.id}.svg) | **${picture.name}** | ${picture.category} | ` +
-      `${stats.strokeCount} | ${Math.round(sketch.width * scale)}×${Math.round(sketch.height * scale)} mm | ` +
-      `≈ ${Math.max(1, Math.round(minutes))} min | [${picture.id}.gcode](${picture.id}.gcode) |`
+      `${plan.strokeCount} | ${size} | ` +
+      `≈ ${Math.max(1, Math.round(plan.minutes))} min | [${picture.id}.gcode](${picture.id}.gcode) |`
   );
 }
 
@@ -51,7 +49,8 @@ Ready-made G-code for the pictures in the app's **Draw → Catalog** tab. Genera
 
 These files use the app's default plotter settings: A4 portrait (${settings.paperWidthMm}×${settings.paperHeightMm} mm),
 ${settings.marginMm} mm margin, drawing at ${settings.drawFeedRate} mm/min, travel at ${settings.travelFeedRate} mm/min,
-pen up \`${settings.penUpCommand}\`, pen down \`${settings.penDownCommand}\`. If your robot is different,
+pen up \`${settings.penUpCommand}\`, pen down \`${settings.penDownCommand}\`, parking at the
+nearest paper corner when done. If your robot is different,
 export from the app instead — it uses your Plotter settings.
 
 | Preview | Picture | Category | Strokes | Size | Time | G-code |

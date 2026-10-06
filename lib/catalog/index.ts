@@ -15,7 +15,11 @@ export function pictureToSketch(picture: CatalogPicture): Sketch {
   const cached = cache.get(picture.id);
   if (cached) return cached;
 
-  const strokes = orderStrokes(picture.paths.flatMap((d) => flattenPath(d, 0.08)));
+  // Start from the bottom-left of the 100 × 100 box, where machine X0 Y0 ends up.
+  const strokes = orderStrokes(
+    picture.paths.flatMap((d) => flattenPath(d, 0.08)),
+    { x: 0, y: 100 }
+  );
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
