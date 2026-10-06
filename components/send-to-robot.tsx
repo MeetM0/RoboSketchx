@@ -72,12 +72,12 @@ export function SendToRobot({ getGcode, penUpCommand, disabled }: Props) {
           <ThemedText
             style={[styles.small, { color: job.state === 'failed' ? '#D93025' : colors.icon }]}>
             {job.state === 'sending'
-              ? `Sending chunk ${Math.min(job.progress.chunksSent + 1, job.progress.chunkCount)} of ${job.progress.chunkCount} · ${kb(job.progress.bytesSent)} of ${kb(job.progress.byteCount)}`
+              ? `Sending ${job.progress.unit} ${Math.min(job.progress.chunksSent + 1, job.progress.chunkCount)} of ${job.progress.chunkCount} · ${kb(job.progress.bytesSent)} of ${kb(job.progress.byteCount)}`
               : job.state === 'done'
-                ? `Sent ${job.progress.chunkCount} chunks (${kb(job.progress.byteCount)}) to ${robot.name}.`
+                ? `Sent ${job.progress.chunkCount} ${job.progress.unit}s (${kb(job.progress.byteCount)}) to ${robot.name}.`
                 : job.state === 'cancelled'
-                  ? `Cancelled after ${job.progress.chunksSent} of ${job.progress.chunkCount} chunks; ${job.penLifted ? 'pen lifted' : "couldn't lift the pen"}.`
-                  : `Failed after ${job.progress.chunksSent} of ${job.progress.chunkCount} chunks: ${job.error}`}
+                  ? `Cancelled after ${job.progress.chunksSent} of ${job.progress.chunkCount} ${job.progress.unit}s; ${job.penLifted ? 'pen lifted' : "couldn't lift the pen"}.`
+                  : `Failed after ${job.progress.chunksSent} of ${job.progress.chunkCount} ${job.progress.unit}s: ${job.error}`}
           </ThemedText>
         </View>
       )}

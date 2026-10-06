@@ -12,12 +12,16 @@
 export const ATT_HEADER_BYTES = 3;
 
 /**
- * Flow control between chunks:
- * - `none`  — send the next chunk as soon as the previous write is acknowledged by BLE.
- * - `chunk` — also wait for the robot to reply with the ack token once per chunk.
- * - `line`  — wait for one ack token per G-code line in the chunk (GRBL-style "ok").
+ * Flow control. A BLE write acknowledgement only means the bytes reached the robot's radio,
+ * not that the controller has room for them, so real flow control needs the controller's
+ * replies:
+ * - `grbl`  — GRBL character counting (default): send a line only while all unacknowledged
+ *   lines fit in the controller's RX buffer (`rxBufferBytes`); each "ok" frees one line.
+ * - `line`  — after each BLE chunk, wait for one ack per G-code line in it.
+ * - `chunk` — after each BLE chunk, wait for one ack.
+ * - `none`  — no flow control: only for firmware that buffers a whole job.
  */
-export type AckMode = 'none' | 'chunk' | 'line';
+export type AckMode = 'grbl' | 'line' | 'chunk' | 'none';
 
 export type RobotSettings = {
   /** ATT MTU to request. The robot may negotiate a smaller one; the smaller value wins. */
@@ -28,6 +32,8 @@ export type RobotSettings = {
   /** Characteristic the robot notifies replies on (robot's transmit). */
   txCharacteristicUUID: string;
   ackMode: AckMode;
+  /** Controller serial RX buffer in bytes (GRBL default 128), for `ackMode: 'grbl'`. */
+  rxBufferBytes: number;
   /** Reply line that counts as an acknowledgement (case-insensitive). */
   ackToken: string;
   /** Give up if the robot doesn't acknowledge within this time. */
@@ -44,7 +50,8 @@ export const NORDIC_UART = {
 export const DEFAULT_ROBOT_SETTINGS: RobotSettings = {
   mtu: 400,
   ...NORDIC_UART,
-  ackMode: 'none',
+  ackMode: 'grbl',
+  rxBufferBytes: 128,
   ackToken: 'ok',
   ackTimeoutMs: 30_000,
 };

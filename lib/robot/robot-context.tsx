@@ -196,7 +196,13 @@ export function RobotProvider({ children }: PropsWithChildren) {
     }
     setError(null);
     cancelRef.current = false;
-    const empty: SendProgress = { chunksSent: 0, chunkCount: 0, bytesSent: 0, byteCount: 0 };
+    const empty: SendProgress = {
+      unit: settings.ackMode === 'grbl' ? 'line' : 'chunk',
+      chunksSent: 0,
+      chunkCount: 0,
+      bytesSent: 0,
+      byteCount: 0,
+    };
     setJob({ state: 'sending', progress: empty });
     let last = empty;
     try {
@@ -205,6 +211,7 @@ export function RobotProvider({ children }: PropsWithChildren) {
         ackMode: settings.ackMode,
         ackToken: settings.ackToken,
         ackTimeoutMs: settings.ackTimeoutMs,
+        rxBufferBytes: settings.rxBufferBytes,
         isCancelled: () => cancelRef.current,
         onProgress: (progress) => {
           last = progress;

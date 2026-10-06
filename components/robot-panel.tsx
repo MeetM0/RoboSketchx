@@ -12,9 +12,10 @@ import { ATT_HEADER_BYTES, type AckMode } from '@/lib/robot/protocol';
 import { useRobot } from '@/lib/robot/robot-context';
 
 const ACK_OPTIONS = [
+  { value: 'grbl', label: 'GRBL' },
+  { value: 'line', label: '"ok"/line' },
+  { value: 'chunk', label: '"ok"/chunk' },
   { value: 'none', label: 'None' },
-  { value: 'chunk', label: '"ok" per chunk' },
-  { value: 'line', label: '"ok" per line' },
 ] as const satisfies readonly { value: AckMode; label: string }[];
 
 /** Find / connect / disconnect the robot over Bluetooth, plus its BLE settings. */
@@ -146,12 +147,31 @@ export function RobotPanel() {
               onCommit={(s) => updateSettings({ ackTimeoutMs: Math.round(s * 1000) })}
             />
           </View>
-          <ThemedText type="defaultSemiBold">Wait for the robot between chunks</ThemedText>
+          <ThemedText type="defaultSemiBold">Flow control</ThemedText>
           <SegmentedControl
             options={ACK_OPTIONS}
             value={settings.ackMode}
             onChange={(ackMode) => updateSettings({ ackMode })}
           />
+          <ThemedText style={[styles.small, { color: colors.icon }]}>
+            {settings.ackMode === 'grbl'
+              ? 'GRBL character counting: only sends while the controller\'s receive buffer has room; each "ok" frees a line.'
+              : settings.ackMode === 'none'
+                ? 'No flow control: only safe if your firmware buffers the whole job. A Bluetooth write acknowledgement does not mean the controller has room.'
+                : 'Waits for "ok" replies between Bluetooth chunks. Each chunk can still be larger than a small controller buffer.'}
+          </ThemedText>
+          {settings.ackMode === 'grbl' && (
+            <View style={styles.row}>
+              <NumberField
+                label="Controller RX buffer"
+                unit="bytes"
+                value={settings.rxBufferBytes}
+                min={16}
+                max={65536}
+                onCommit={(n) => updateSettings({ rxBufferBytes: Math.round(n) })}
+              />
+            </View>
+          )}
           {settings.ackMode !== 'none' && (
             <TextField
               label="Reply that means OK"
