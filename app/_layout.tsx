@@ -5,6 +5,7 @@ import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { PlotterSettingsProvider } from '@/lib/plotter-settings';
+import { RobotProvider } from '@/lib/robot/robot-context';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -16,9 +17,11 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <PlotterSettingsProvider>
-        <Stack>
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        </Stack>
+        <RobotProvider>
+          <Stack>
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          </Stack>
+        </RobotProvider>
       </PlotterSettingsProvider>
       <StatusBar style="auto" />
     </ThemeProvider>

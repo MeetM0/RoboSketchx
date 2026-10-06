@@ -10,7 +10,8 @@ Turn photos and text into pen strokes that a drawing robot / pen plotter can dra
   Calligraphy), size and alignment; "Natural" adds slight per-letter variation so it looks
   hand-written.
 
-Every mode previews the result on your sheet of paper and exports **G-code** or **SVG**.
+Every mode previews the result on your sheet of paper, **sends the G-code to the robot over
+Bluetooth LE**, or exports **G-code** / **SVG** files.
 
 Runs on iOS, Android and web (Expo SDK 54, expo-router).
 
@@ -25,6 +26,20 @@ npx expo start
 
 Press `i` (iOS simulator), `a` (Android emulator) or `w` (web), or scan the QR code with Expo Go.
 
+### Bluetooth needs a development build
+
+Everything except Bluetooth runs in Expo Go. Sending to the robot uses native BLE
+(`react-native-ble-plx`), so build the app once with the native code included:
+
+```bash
+npx expo run:ios --device      # iPhone over USB (needs Xcode)
+npx expo run:android --device  # Android phone over USB (needs Android Studio)
+```
+
+After that, `npx expo start` serves updates to the installed development build. (Or use
+EAS: `eas build --profile development`.) On the web, Bluetooth works in Chrome and Edge via
+Web Bluetooth. The iOS simulator has no Bluetooth; use a real phone.
+
 ## Project layout
 
 | Path | What it is |
@@ -38,6 +53,9 @@ Press `i` (iOS simulator), `a` (Android emulator) or `w` (web), or scan the QR c
 | `lib/text/` | Text → strokes: single-stroke fonts (`font-data.ts`, generated) and line layout |
 | `scripts/build-fonts.js` | Regenerates `lib/text/font-data.ts` from the `hersheytext` fonts (`npm run build-fonts`) |
 | `lib/prepare-photo.ts` | Downscales the picked photo to 512px and returns it as JPEG base64 |
+| `lib/robot/` | Bluetooth: chunking protocol, sender with flow control, native + web BLE links, connection context |
+| `components/robot-panel.tsx` | Plotter tab: find / connect the robot, Bluetooth settings, robot replies |
+| `components/send-to-robot.tsx` | "Send to robot" button with chunk progress and cancel |
 | `lib/plotter-settings.tsx` | Plotter settings context, persisted with AsyncStorage |
 | `lib/share-file.ts` / `.web.ts` | Share sheet on native, file download on web |
 | `components/catalog-browser.tsx` | Catalog grid with category filter and preview |
@@ -80,3 +98,29 @@ to fill. RoboSketch ships four from the Hershey / EMS engraving fonts (licences 
 `lib/text/FONTS-LICENSE.md`). `layoutText` wraps words to the paper's writing area, splits
 over-long words, reports lines that don't fit and characters the font lacks, and keeps strokes
 in writing order.
+
+## Sending to the robot over Bluetooth LE (`lib/robot`)
+
+| | Default | Setting |
+| --- | --- | --- |
+| Service | Nordic UART Service `6e400001-b5a3-f393-e0a9-e50e24dcca9e` | Plotter → Bluetooth settings |
+| RX (app → robot, write with response) | `6e400002-b5a3-f393-e0a9-e50e24dcca9e` | ″ |
+| TX (robot → app, notify; optional) | `6e400003-b5a3-f393-e0a9-e50e24dcca9e` | ″ |
+| MTU requested | **400** → chunks of up to **397 bytes** (MTU − 3-byte ATT header) | ″ |
+| Flow control | none | none / one `ok` per chunk / one `ok` per line |
+
+- The G-code is plain ASCII, one command per line ending in `\n`. It is split into chunks that
+  **always end on a line break**, so the robot never gets half a command; chunks are written
+  one at a time, each waiting for the BLE write acknowledgement.
+- Android requests MTU 400 when connecting. iOS negotiates the MTU itself; if the robot or phone
+  agrees on less than 400, chunks shrink to fit (the app shows a warning). Browsers don't expose
+  the MTU, so web sends 397-byte writes and relies on BLE long writes if the real MTU is smaller.
+- With flow control on, the app waits for the robot to notify the reply token (default `ok`)
+  on TX before sending the next chunk — once per chunk, or once per G-code line (GRBL style).
+  Replies may arrive split across notifications. No reply within the timeout (default 30 s)
+  stops the job with an error.
+- **Cancel** stops between chunks and then sends the pen-up command so the pen doesn't drag.
+- The robot firmware should accept writes of up to 397 bytes on RX, buffer the lines and
+  execute them in order. If its buffer is small, enable flow control and reply `ok` once it
+  has room for more.
+

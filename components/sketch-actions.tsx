@@ -1,6 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 
 import { Button } from '@/components/button';
+import { SendToRobot } from '@/components/send-to-robot';
 import { ThemedText } from '@/components/themed-text';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -22,7 +23,7 @@ type Props = {
   onError: (message: string) => void;
 };
 
-/** Stroke count, drawn size and estimated time, plus G-code / SVG export buttons. */
+/** Stroke count, drawn size and estimated time, send-to-robot, and G-code / SVG export. */
 export function SketchActions({ sketch, disabled, fileName, onError }: Props) {
   const { settings } = usePlotterSettings();
 
@@ -40,9 +41,15 @@ export function SketchActions({ sketch, disabled, fileName, onError }: Props) {
     }
   }
 
+  const sendable = sketch && sketch.strokes.length && !disabled ? sketch : null;
+
   return (
     <>
       {sketch && <SketchSummary sketch={sketch} />}
+      <SendToRobot
+        getGcode={sendable ? () => sketchToGcode(sendable, settings) : null}
+        penUpCommand={settings.penUpCommand}
+      />
       <View style={styles.row}>
         <Button
           title="Export G-code"
@@ -97,7 +104,9 @@ function SketchSummary({ sketch }: { sketch: Sketch }) {
     <View style={[styles.summary, { backgroundColor: colors.card }]}>
       {items.map((item) => (
         <View key={item.label} style={styles.summaryItem}>
-          <ThemedText style={[styles.summaryLabel, { color: colors.icon }]}>{item.label}</ThemedText>
+          <ThemedText style={[styles.summaryLabel, { color: colors.icon }]}>
+            {item.label}
+          </ThemedText>
           <ThemedText type="defaultSemiBold">{item.value}</ThemedText>
         </View>
       ))}

@@ -23,6 +23,9 @@ const MAPPING = {
   'square.and.arrow.up': 'ios-share',
   'arrow.counterclockwise': 'refresh',
   'character.cursor.ibeam': 'text-fields',
+  'antenna.radiowaves.left.and.right': 'bluetooth',
+  'paperplane.fill': 'send',
+  xmark: 'close',
 } as IconMapping;
 
 /**
