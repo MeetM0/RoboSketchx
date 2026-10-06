@@ -154,12 +154,18 @@ export function layoutText(
     });
   });
 
+  // Glyph ink can reach past the font metrics (tall accents, script loops) and past the
+  // advance widths used for wrapping. Measure the real ink and keep it inside the area:
+  // shrink if it is larger than the area, then shift it in.
+  const fit = keepInside(strokes, area);
+  const k = fit.scale;
+
   return {
-    sketch: { width: area.widthMm, height: area.heightMm, strokes },
+    sketch: { width: area.widthMm, height: area.heightMm, strokes: fit.strokes },
     overflowLines,
     missingChars: [...missing].filter((c) => c.trim()),
-    letterHeightMm,
-    xHeightMm: metrics.xHeight * scale,
+    letterHeightMm: letterHeightMm * k,
+    xHeightMm: metrics.xHeight * scale * k,
   };
 }
 
@@ -167,6 +173,40 @@ export function layoutText(
  * Largest capital height at which every paragraph fits on one line and all lines fit the
  * area's height, capped at `MAX_FIT_LETTER_HEIGHT_MM`.
  */
+/** Uniformly shrinks (never enlarges) and then shifts strokes so their ink lies in the area. */
+function keepInside(strokes: Polyline[], area: { widthMm: number; heightMm: number }) {
+  if (!strokes.length) return { strokes, scale: 1 };
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const s of strokes) {
+    for (const p of s) {
+      minX = Math.min(minX, p.x);
+      minY = Math.min(minY, p.y);
+      maxX = Math.max(maxX, p.x);
+      maxY = Math.max(maxY, p.y);
+    }
+  }
+  // A 0.01 mm inset so 2-decimal rounding in the G-code can't land a point on the far side.
+  const inset = 0.01;
+  const width = area.widthMm - 2 * inset;
+  const height = area.heightMm - 2 * inset;
+  const scale = Math.min(1, width / (maxX - minX || 1), height / (maxY - minY || 1));
+  // Shrink about the ink's top-left so the layout keeps its position as far as possible.
+  const sx = (x: number) => minX + (x - minX) * scale;
+  const sy = (y: number) => minY + (y - minY) * scale;
+  const shift = (lo: number, hi: number, limit: number) =>
+    lo < inset ? inset - lo : hi > limit - inset ? limit - inset - hi : 0;
+  const dx = shift(sx(minX), sx(maxX), area.widthMm);
+  const dy = shift(sy(minY), sy(maxY), area.heightMm);
+  if (scale === 1 && dx === 0 && dy === 0) return { strokes, scale };
+  return {
+    strokes: strokes.map((s) => s.map((p) => ({ x: sx(p.x) + dx, y: sy(p.y) + dy }))),
+    scale,
+  };
+}
+
 function fitLetterHeight(
   text: string,
   area: { widthMm: number; heightMm: number },
