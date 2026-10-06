@@ -22,6 +22,8 @@ const MAPPING = {
   'camera.fill': 'photo-camera',
   'square.and.arrow.up': 'ios-share',
   'arrow.counterclockwise': 'refresh',
+  'character.cursor.ibeam': 'text-fields',
+  'doc.text.viewfinder': 'document-scanner',
 } as IconMapping;
 
 /**

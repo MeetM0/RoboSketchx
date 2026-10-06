@@ -1,5 +1,4 @@
 import { Image } from 'expo-image';
-import * as ImagePicker from 'expo-image-picker';
 import { useRef, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -7,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { BackgroundOverlay } from '@/components/background-overlay';
 import { Button } from '@/components/button';
 import { SegmentedControl } from '@/components/segmented-control';
+import { SketchActions } from '@/components/sketch-actions';
 import { SketchPreview } from '@/components/sketch-preview';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -14,18 +14,14 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { usePlotterSettings } from '@/lib/plotter-settings';
+import { pickImage, type PickedImage } from '@/lib/pick-image';
 import { preparePhoto } from '@/lib/prepare-photo';
-import { shareTextFile } from '@/lib/share-file';
 import {
   applyMask,
-  computeStats,
   decodeJpegBase64,
   DETAIL_PRESETS,
   imageToSketch,
-  pixelToPaperTransform,
   removeBackground,
-  sketchToGcode,
-  sketchToSvg,
   type BackgroundRemoval,
   type DetailLevel,
   type RgbaImage,
@@ -58,15 +54,13 @@ const VIEW_OPTIONS = [
   { value: 'photo', label: 'Photo' },
 ] as const;
 
-type Photo = { uri: string; width: number; height: number };
-
 // Edge detection runs on the JS thread; yield first so the spinner can render.
 const nextFrame = () => new Promise((resolve) => setTimeout(resolve, 50));
 
 export default function CreateScreen() {
   const colors = Colors[useColorScheme() ?? 'light'];
   const { settings } = usePlotterSettings();
-  const [photo, setPhoto] = useState<Photo | null>(null);
+  const [photo, setPhoto] = useState<PickedImage | null>(null);
   // The downscaled photo the engine works on, and its background mask (computed on demand).
   const [source, setSource] = useState<RgbaImage | null>(null);
   const [removal, setRemoval] = useState<BackgroundRemoval | null>(null);
@@ -111,29 +105,24 @@ export default function CreateScreen() {
     }
   }
 
-  async function pickPhoto(source: 'camera' | 'library') {
-    if (source === 'camera' && process.env.EXPO_OS !== 'web') {
-      const permission = await ImagePicker.requestCameraPermissionsAsync();
-      if (!permission.granted) {
-        setError('Camera permission is needed to take a photo.');
-        return;
-      }
+  async function pickPhoto(from: 'camera' | 'library') {
+    let asset: PickedImage | null;
+    try {
+      asset = await pickImage(from);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      return;
     }
-    const options: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], quality: 1 };
-    const result =
-      source === 'camera'
-        ? await ImagePicker.launchCameraAsync(options)
-        : await ImagePicker.launchImageLibraryAsync(options);
-    if (result.canceled) return;
+    if (!asset) return;
 
-    const asset = result.assets[0];
-    setPhoto({ uri: asset.uri, width: asset.width, height: asset.height });
+    setPhoto(asset);
     setSource(null);
     setRemoval(null);
     setSketch(null);
     setView('sketch');
     await run(async (job) => {
-      const image = decodeJpegBase64(await preparePhoto(asset.uri, asset.width, asset.height));
+      const { uri, width, height } = asset;
+      const image = decodeJpegBase64(await preparePhoto(uri, width, height));
       if (job !== jobRef.current) return;
       setSource(image);
       await generate(job, image, null, detail, background);
@@ -155,20 +144,6 @@ export default function CreateScreen() {
     background === 'remove' && removal && !removal.ok
       ? REMOVAL_FAILURE_MESSAGES[removal.reason]
       : null;
-
-  async function exportFile(kind: 'gcode' | 'svg') {
-    if (!sketch) return;
-    const name = `robosketch-${Date.now()}`;
-    try {
-      if (kind === 'gcode') {
-        await shareTextFile(`${name}.gcode`, sketchToGcode(sketch, settings), 'text/plain');
-      } else {
-        await shareTextFile(`${name}.svg`, sketchToSvg(sketch), 'image/svg+xml');
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
-  }
 
   return (
     <ThemedView style={styles.screen}>
@@ -271,24 +246,12 @@ export default function CreateScreen() {
                 />
               </View>
 
-              {sketch && (
-                <SketchSummary sketch={sketch} cardColor={colors.card} mutedColor={colors.icon} />
-              )}
-
-              <View style={styles.row}>
-                <Button
-                  title="Export G-code"
-                  icon="square.and.arrow.up"
-                  disabled={!sketch || busy}
-                  onPress={() => exportFile('gcode')}
-                />
-                <Button
-                  title="Export SVG"
-                  variant="secondary"
-                  disabled={!sketch || busy}
-                  onPress={() => exportFile('svg')}
-                />
-              </View>
+              <SketchActions
+                sketch={sketch}
+                disabled={busy}
+                fileName="robosketch-drawing"
+                onError={setError}
+              />
             </>
           )}
 
@@ -316,39 +279,6 @@ export default function CreateScreen() {
         </ScrollView>
       </SafeAreaView>
     </ThemedView>
-  );
-}
-
-function SketchSummary({
-  sketch,
-  cardColor,
-  mutedColor,
-}: {
-  sketch: Sketch;
-  cardColor: string;
-  mutedColor: string;
-}) {
-  const { settings } = usePlotterSettings();
-  const stats = computeStats(sketch.strokes);
-  const { scale } = pixelToPaperTransform(sketch, settings);
-  const minutes =
-    (stats.drawLength * scale) / settings.drawFeedRate +
-    (stats.travelLength * scale) / settings.travelFeedRate;
-  const items = [
-    { label: 'Strokes', value: stats.strokeCount.toLocaleString() },
-    { label: 'Drawing size', value: `${Math.round(sketch.width * scale)}×${Math.round(sketch.height * scale)} mm` },
-    { label: 'Est. time', value: minutes < 1 ? '< 1 min' : `≈ ${Math.round(minutes)} min` },
-  ];
-
-  return (
-    <View style={[styles.summary, { backgroundColor: cardColor }]}>
-      {items.map((item) => (
-        <View key={item.label} style={styles.summaryItem}>
-          <ThemedText style={[styles.summaryLabel, { color: mutedColor }]}>{item.label}</ThemedText>
-          <ThemedText type="defaultSemiBold">{item.value}</ThemedText>
-        </View>
-      ))}
-    </View>
   );
 }
 
@@ -404,20 +334,6 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     gap: 12,
-  },
-  summary: {
-    flexDirection: 'row',
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-  },
-  summaryItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  summaryLabel: {
-    fontSize: 13,
-    lineHeight: 18,
   },
   note: {
     fontSize: 14,

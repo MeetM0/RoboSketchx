@@ -19,9 +19,18 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Create',
+          title: 'Draw',
           tabBarIcon: ({ color }) => (
             <IconSymbol size={28} name="pencil.and.outline" color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="write"
+        options={{
+          title: 'Write',
+          tabBarIcon: ({ color }) => (
+            <IconSymbol size={28} name="character.cursor.ibeam" color={color} />
           ),
         }}
       />

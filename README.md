@@ -1,11 +1,16 @@
 # RoboSketch
 
-Turn a photo into line art that a drawing robot / pen plotter can draw.
+Turn photos and text into pen strokes that a drawing robot / pen plotter can draw.
 
-1. Take or choose a photo.
-2. RoboSketch removes the background, then traces the subject's outlines into pen strokes
-   (pick **Low / Medium / High** detail).
-3. Preview the drawing on your sheet of paper, then export **G-code** for the robot or **SVG**.
+- **Draw:** take or choose a photo; RoboSketch removes the background and traces the subject's
+  outlines (pick **Low / Medium / High** detail).
+- **Write → Type:** type a message and pick a single-stroke font (Print, Handwriting, Cursive,
+  Calligraphy), size and alignment; "Natural" adds slight per-letter variation so it looks
+  hand-written.
+- **Write → Scan page:** photograph handwriting or a line drawing on paper; RoboSketch traces the
+  centre of every pen line so the robot copies it in the same hand.
+
+Every mode previews the result on your sheet of paper and exports **G-code** or **SVG**.
 
 Runs on iOS, Android and web (Expo SDK 54, expo-router).
 
@@ -24,12 +29,17 @@ Press `i` (iOS simulator), `a` (Android emulator) or `w` (web), or scan the QR c
 
 | Path | What it is |
 | --- | --- |
-| `app/(tabs)/index.tsx` | **Create** screen: pick a photo, preview the sketch, export |
+| `app/(tabs)/index.tsx` | **Draw** screen: pick a photo, preview the sketch, export |
+| `app/(tabs)/write.tsx` | **Write** screen: type text or scan a handwritten page |
 | `app/(tabs)/plotter.tsx` | **Plotter** screen: paper size, margin, speeds, pen up/down G-code |
 | `lib/sketch/` | The photo → strokes engine (pure TypeScript, no React) |
+| `lib/sketch/centerline.ts` | Page scan: ink threshold → thinning → centre-line strokes |
+| `lib/text/` | Text → strokes: single-stroke fonts (`font-data.ts`, generated) and line layout |
+| `scripts/build-fonts.js` | Regenerates `lib/text/font-data.ts` from the `hersheytext` fonts (`npm run build-fonts`) |
 | `lib/prepare-photo.ts` | Downscales the picked photo to 512px and returns it as JPEG base64 |
 | `lib/plotter-settings.tsx` | Plotter settings context, persisted with AsyncStorage |
 | `lib/share-file.ts` / `.web.ts` | Share sheet on native, file download on web |
+| `components/sketch-actions.tsx` | Stroke count / size / time summary and the export buttons |
 | `components/sketch-preview.tsx` | Draws the strokes on the configured paper with react-native-svg |
 | `components/background-overlay.tsx` | Fades the removed background over the photo |
 
@@ -51,3 +61,23 @@ Press `i` (iOS simulator), `a` (Android emulator) or `w` (web), or scan the QR c
    machine, pen up/down commands and feed rates from the Plotter settings).
 
 Detail presets live in `DETAIL_PRESETS` in `lib/sketch/index.ts`.
+
+## Writing text (`lib/text`)
+
+Plotters need **single-stroke** fonts: each letter is a few pen paths rather than an outline
+to fill. RoboSketch ships four from the Hershey / EMS engraving fonts (licences in
+`lib/text/FONTS-LICENSE.md`). `layoutText` wraps words to the paper's writing area, splits
+over-long words, reports lines that don't fit and characters the font lacks, and keeps strokes
+in writing order.
+
+## Scanning a page (`lib/sketch/centerline.ts`)
+
+1. **Ink vs paper** with an adaptive (local mean) threshold, so shadows and uneven light don't
+   matter. Photos are processed at 1200 px so handwriting stays several pixels thick.
+2. **Clean up:** drop specks and large blobs touching the photo edge (table, page edge,
+   shadows); fill pin-holes inside strokes.
+3. **Zhang–Suen thinning** to 1-pixel centre lines; restore dots that thinning erases.
+4. **Trace**, drop stray staircase pixels, simplify, order, join strokes that touch, and crop
+   to the writing so it fills the paper.
+
+This copies the *shape* of the writing; it doesn't recognise the words (no OCR).

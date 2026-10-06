@@ -6,6 +6,7 @@ import { traceEdges } from './trace';
 import type { DetailLevel, RgbaImage, Sketch, SketchOptions } from './types';
 
 export { applyMask, backgroundPathData, removeBackground, type BackgroundRemoval } from './background';
+export { DEFAULT_SCAN_OPTIONS, scanPage, type PageScan, type ScanOptions } from './centerline';
 export * from './export';
 export { computeStats } from './geometry';
 export * from './types';
