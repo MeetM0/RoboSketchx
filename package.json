@@ -10,7 +10,8 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "build-fonts": "node ./scripts/build-fonts.js",
-    "export-catalog": "node -r sucrase/register ./scripts/export-catalog.ts"
+    "export-catalog": "node -r sucrase/register ./scripts/export-catalog.ts",
+    "test": "node -r sucrase/register --test --test-reporter=spec \"tests/**/*.test.ts\""
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
