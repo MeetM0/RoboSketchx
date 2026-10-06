@@ -18,15 +18,13 @@ import { usePlotterSettings } from '@/lib/plotter-settings';
 import { pickImage, type PickedImage } from '@/lib/pick-image';
 import { preparePhoto } from '@/lib/prepare-photo';
 import {
-  applyMask,
   decodeJpegBase64,
-  DETAIL_PRESETS,
-  imageToSketch,
-  removeBackground,
+  PHOTO_WORK_SIZE,
+  photoToSketch,
   type BackgroundRemoval,
   type DetailLevel,
+  type PhotoSketch,
   type RgbaImage,
-  type Sketch,
 } from '@/lib/sketch';
 
 const DETAIL_OPTIONS = [
@@ -96,33 +94,23 @@ function PhotoMode() {
   const [photo, setPhoto] = useState<PickedImage | null>(null);
   // The downscaled photo the engine works on, and its background mask (computed on demand).
   const [source, setSource] = useState<RgbaImage | null>(null);
-  const [removal, setRemoval] = useState<BackgroundRemoval | null>(null);
+  const [result, setResult] = useState<PhotoSketch | null>(null);
   const [detail, setDetail] = useState<DetailLevel>('medium');
   const [background, setBackground] = useState<BackgroundMode>('remove');
   const [view, setView] = useState<'sketch' | 'photo'>('sketch');
-  const [sketch, setSketch] = useState<Sketch | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Bumped on every new request so results from an older, slower request are ignored.
   const jobRef = useRef(0);
 
-  async function generate(
-    job: number,
-    image: RgbaImage,
-    cachedRemoval: BackgroundRemoval | null,
-    level: DetailLevel,
-    mode: BackgroundMode
-  ) {
+  async function generate(job: number, image: RgbaImage, level: DetailLevel, mode: BackgroundMode) {
     await nextFrame();
-    let input = image;
-    if (mode === 'remove') {
-      const result = cachedRemoval ?? removeBackground(image);
-      if (job !== jobRef.current) return;
-      setRemoval(result);
-      if (result.ok) input = applyMask(image, result.mask);
-    }
-    const result = imageToSketch(input, DETAIL_PRESETS[level]);
-    if (job === jobRef.current) setSketch(result);
+    const next = photoToSketch(image, {
+      detail: level,
+      removeBackground: mode === 'remove',
+      settings,
+    });
+    if (job === jobRef.current) setResult(next);
   }
 
   async function run(task: (job: number) => Promise<void>) {
@@ -150,28 +138,29 @@ function PhotoMode() {
 
     setPhoto(asset);
     setSource(null);
-    setRemoval(null);
-    setSketch(null);
+    setResult(null);
     setView('sketch');
     await run(async (job) => {
       const { uri, width, height } = asset;
-      const image = decodeJpegBase64(await preparePhoto(uri, width, height));
+      const image = decodeJpegBase64(await preparePhoto(uri, width, height, PHOTO_WORK_SIZE));
       if (job !== jobRef.current) return;
       setSource(image);
-      await generate(job, image, null, detail, background);
+      await generate(job, image, detail, background);
     });
   }
 
   function changeDetail(level: DetailLevel) {
     setDetail(level);
-    if (source) run((job) => generate(job, source, removal, level, background));
+    if (source) run((job) => generate(job, source, level, background));
   }
 
   function changeBackground(mode: BackgroundMode) {
     setBackground(mode);
-    if (source) run((job) => generate(job, source, removal, detail, mode));
+    if (source) run((job) => generate(job, source, detail, mode));
   }
 
+  const sketch = result?.sketch ?? null;
+  const removal = result?.removal ?? null;
   const removalApplied = background === 'remove' && removal?.ok ? removal : null;
   const removalFailure =
     background === 'remove' && removal && !removal.ok
@@ -209,11 +198,14 @@ function PhotoMode() {
                     },
                   ]}
                 />
-                {source && removalApplied && (
+                {source && result && (
                   <BackgroundOverlay
-                    mask={removalApplied.mask}
-                    width={source.width}
-                    height={source.height}
+                    frameWidth={source.width}
+                    frameHeight={source.height}
+                    crop={result.crop}
+                    mask={removalApplied?.mask ?? null}
+                    maskWidth={result.traced.width}
+                    maskHeight={result.traced.height}
                   />
                 )}
               </View>

@@ -5,8 +5,22 @@ import { orderStrokes, polylineLength, simplify } from './geometry';
 import { traceEdges } from './trace';
 import type { DetailLevel, RgbaImage, Sketch, SketchOptions } from './types';
 
-export { applyMask, backgroundPathData, removeBackground, type BackgroundRemoval } from './background';
+export {
+  applyMask,
+  backgroundPathData,
+  removeBackground,
+  type BackgroundRemoval,
+} from './background';
 export * from './export';
+export {
+  cropImage,
+  photoToSketch,
+  PHOTO_WORK_SIZE,
+  resizeImage,
+  TRACE_SIZE,
+  type CropRect,
+  type PhotoSketch,
+} from './photo';
 export { computeStats, joinStrokes } from './geometry';
 export * from './types';
 
@@ -38,10 +52,7 @@ export const DETAIL_PRESETS: Record<DetailLevel, SketchOptions> = {
 };
 
 /** Converts an image into ordered pen strokes. */
-export function imageToSketch(
-  { data, width, height }: RgbaImage,
-  options: SketchOptions
-): Sketch {
+export function imageToSketch({ data, width, height }: RgbaImage, options: SketchOptions): Sketch {
   const edges = detectEdges(
     data,
     width,

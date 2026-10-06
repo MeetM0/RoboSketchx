@@ -1,9 +1,6 @@
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 
-/**
- * Longest side of the image fed to edge detection. Larger gives finer lines but processing
- * time grows with the pixel count and the strokes get too dense for a pen to reproduce.
- */
+/** Default longest side; photo mode asks for PHOTO_WORK_SIZE so it can crop before tracing. */
 export const PROCESSING_SIZE = 512;
 
 /** Downscales a picked photo and returns it as base64 JPEG for the sketch engine. */

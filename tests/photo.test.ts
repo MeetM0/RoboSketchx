@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import * as sk from '../lib/sketch';
-import { snoopScene } from './helpers/scenes';
+import { downscale, snoopScene } from './helpers/scenes';
 
 const S = sk.DEFAULT_PLOTTER_SETTINGS;
 const USABLE = { w: S.paperWidthMm - 2 * S.marginMm, h: S.paperHeightMm - 2 * S.marginMm };
@@ -19,15 +19,18 @@ const bboxOf = (strokes: { x: number; y: number }[][]) => {
   };
 };
 
-/** The app's photo pipeline as it stands (decoded image in, sketch out). */
-function photoSketch(image: sk.RgbaImage) {
+/**
+ * The app's photo pipeline (decoded working image in, sketch out). Before photoToSketch
+ * existed, the app resized the whole frame to 512 px and traced it.
+ */
+function photoSketch(image: sk.RgbaImage): sk.Sketch {
   const run = (sk as unknown as { photoToSketch?: Function }).photoToSketch;
-  if (run)
-    return run(image, { detail: 'medium', removeBackground: true, settings: S })
-      .sketch as sk.Sketch;
-  const removal = sk.removeBackground(image);
+  if (run) return run(image, { detail: 'medium', removeBackground: true, settings: S }).sketch;
+  const longest = Math.max(image.width, image.height);
+  const small = longest > 512 ? downscale(image, longest / 512) : image;
+  const removal = sk.removeBackground(small);
   return sk.imageToSketch(
-    removal.ok ? sk.applyMask(image, removal.mask) : image,
+    removal.ok ? sk.applyMask(small, removal.mask) : small,
     sk.DETAIL_PRESETS.medium
   );
 }
@@ -47,4 +50,17 @@ test('P2: the drawing (stroke bbox) is fitted and centred in the printable area'
     Math.abs(centre.x - S.paperWidthMm / 2) < 0.5 && Math.abs(centre.y - S.paperHeightMm / 2) < 0.5,
     'centred'
   );
+});
+
+test('P1: the subject is cropped before resizing, so it gets the full 512 px', () => {
+  // The app prepares photos at 1024 px; this is the same scene at 768 × 1024.
+  const sketch = photoSketch(snoopScene(768, 1024));
+  const b = bboxOf(sketch.strokes);
+  const subjectPx = Math.max(b.maxX - b.minX, b.maxY - b.minY);
+  const mmPerPx = sk.pixelToPaperTransform(sketch, S).scale;
+  console.log(
+    `  traced frame ${sketch.width}×${sketch.height} px; subject ${r2(b.maxX - b.minX)} × ${r2(b.maxY - b.minY)} px; ${r2(mmPerPx)} mm per traced px on A4`
+  );
+  assert.ok(subjectPx >= 440, `subject only ${r2(subjectPx)} px`);
+  assert.ok(mmPerPx <= 0.45, `${r2(mmPerPx)} mm/px`);
 });
