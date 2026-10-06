@@ -80,3 +80,91 @@ test('B2: custom firmware cancel = stop command, then pen up', async () => {
     ['M0\n', 'M5\n']
   );
 });
+
+test('B4: a dropped connection fails the job and the next connection stops the robot first', async () => {
+  const { runJob, recoverOnConnect } = await import('../lib/robot/job');
+  const robot = fakeGrbl({ lineMs: 5 });
+  let disconnected = false;
+  let writes = 0;
+  const flaky = {
+    ...robot.transport,
+    async write(bytes: Uint8Array) {
+      if (++writes > 5) {
+        disconnected = true;
+        throw new Error('Device disconnected');
+      }
+      await robot.transport.write(bytes);
+    },
+  };
+  const result = await runJob(flaky, GCODE, {
+    send: {
+      payloadBytes: 397,
+      ackMode: 'grbl',
+      ackToken: 'ok',
+      ackTimeoutMs: 2000,
+      rxBufferBytes: 128,
+    },
+    userCancelled: () => false,
+    disconnected: () => disconnected,
+  });
+  console.log(
+    `  result: ${JSON.stringify({ state: result.state, needsStop: result.needsStop, sent: result.progress.chunksSent, error: result.error })}`
+  );
+  assert.equal(result.state, 'failed');
+  assert.equal(result.needsStop, true);
+  assert.match(result.error ?? '', /connection lost/i);
+
+  // Reconnect: the stop sequence goes out before anything else; nothing resumes.
+  const fresh = fakeGrbl();
+  const steps = await recoverOnConnect(fresh.transport, result.needsStop, {
+    firmware: 'grbl',
+    stopCommand: '',
+    penUpLine: 'G0 Z5.00',
+  });
+  const sent = fresh.raw.map((b) =>
+    b.length === 1 ? `0x${b[0].toString(16)}` : String.fromCharCode(...b)
+  );
+  console.log(`  on reconnect: ${JSON.stringify(sent)}`);
+  assert.deepEqual(sent, ['0x21', '0x18', '$X\n', 'G0 Z5.00\n']);
+  assert.ok(steps.length > 0);
+  assert.deepEqual(
+    await recoverOnConnect(fakeGrbl().transport, false, {
+      firmware: 'grbl',
+      stopCommand: '',
+      penUpLine: 'G0 Z5.00',
+    }),
+    []
+  );
+});
+
+test('B4: user cancel is still "cancelled", other errors "failed"', async () => {
+  const { runJob } = await import('../lib/robot/job');
+  const robot = fakeGrbl({ lineMs: 5 });
+  let n = 0;
+  const cancelled = await runJob(robot.transport, GCODE, {
+    send: {
+      payloadBytes: 397,
+      ackMode: 'grbl',
+      ackToken: 'ok',
+      ackTimeoutMs: 2000,
+      rxBufferBytes: 128,
+    },
+    userCancelled: () => ++n > 20,
+    disconnected: () => false,
+  });
+  assert.equal(cancelled.state, 'cancelled');
+  assert.equal(cancelled.needsStop, true);
+  const failed = await runJob(fakeGrbl({ failOn: /G1 Z/ }).transport, GCODE, {
+    send: {
+      payloadBytes: 397,
+      ackMode: 'grbl',
+      ackToken: 'ok',
+      ackTimeoutMs: 2000,
+      rxBufferBytes: 128,
+    },
+    userCancelled: () => false,
+    disconnected: () => false,
+  });
+  assert.equal(failed.state, 'failed');
+  assert.match(failed.error ?? '', /error:22/);
+});

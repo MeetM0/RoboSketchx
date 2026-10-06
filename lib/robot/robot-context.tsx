@@ -11,7 +11,8 @@ import {
 import { robotLink } from './link';
 import type { FoundRobot, RobotConnection } from './link-types';
 import { DEFAULT_ROBOT_SETTINGS, payloadSize, type RobotSettings } from './protocol';
-import { SendCancelled, sendGcode, type SendProgress } from './sender';
+import { recoverOnConnect, runJob } from './job';
+import { type SendProgress } from './sender';
 import { stopRobot } from './stop';
 
 const STORAGE_KEY = 'robosketch.robotSettings.v1';
@@ -64,6 +65,10 @@ export function RobotProvider({ children }: PropsWithChildren) {
   const cleanupRef = useRef<(() => void)[]>([]);
   const stopScanRef = useRef<(() => void) | null>(null);
   const cancelRef = useRef(false);
+  // Set when the link drops (or the person disconnects) during a job.
+  const disconnectedRef = useRef(false);
+  // Pen-up line of a job that was interrupted; the robot is stopped on the next connection.
+  const pendingStopRef = useRef<string | null>(null);
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY)
@@ -163,7 +168,7 @@ export function RobotProvider({ children }: PropsWithChildren) {
         }),
         connection.onDisconnect(() => {
           addLog('Robot disconnected');
-          cancelRef.current = true;
+          disconnectedRef.current = true;
           forgetConnection();
         }),
       ];
@@ -173,8 +178,20 @@ export function RobotProvider({ children }: PropsWithChildren) {
         mtuKnown: connection.mtuKnown,
         payloadBytes: payloadSize(settings.mtu, connection.mtu),
       });
-      setStatus('connected');
+      disconnectedRef.current = false;
       addLog(`Connected to ${connection.name} (MTU ${connection.mtu})`);
+      // A job was interrupted: the robot may still be moving with the pen down. Stop it before
+      // anything else; the job itself is never resumed.
+      if (pendingStopRef.current) {
+        const steps = await recoverOnConnect(connection, true, {
+          firmware: settings.firmware,
+          stopCommand: settings.stopCommand,
+          penUpLine: pendingStopRef.current,
+        });
+        pendingStopRef.current = null;
+        addLog(`Recovered interrupted job: ${steps.join(' → ')}`);
+      }
+      setStatus('connected');
     } catch (e) {
       forgetConnection();
       setError(e instanceof Error ? e.message : String(e));
@@ -182,7 +199,7 @@ export function RobotProvider({ children }: PropsWithChildren) {
   }
 
   async function disconnect() {
-    cancelRef.current = true;
+    disconnectedRef.current = true;
     const connection = connectionRef.current;
     forgetConnection();
     await connection?.disconnect();
@@ -197,6 +214,7 @@ export function RobotProvider({ children }: PropsWithChildren) {
     }
     setError(null);
     cancelRef.current = false;
+    disconnectedRef.current = false;
     const empty: SendProgress = {
       unit: settings.ackMode === 'grbl' ? 'line' : 'chunk',
       chunksSent: 0,
@@ -205,46 +223,46 @@ export function RobotProvider({ children }: PropsWithChildren) {
       byteCount: 0,
     };
     setJob({ state: 'sending', progress: empty });
-    let last = empty;
-    try {
-      last = await sendGcode(connection, gcode, {
+    const result = await runJob(connection, gcode, {
+      send: {
         payloadBytes: robot.payloadBytes,
         ackMode: settings.ackMode,
         ackToken: settings.ackToken,
         ackTimeoutMs: settings.ackTimeoutMs,
         rxBufferBytes: settings.rxBufferBytes,
-        isCancelled: () => cancelRef.current,
-        onProgress: (progress) => {
-          last = progress;
-          setJob({ state: 'sending', progress });
-        },
-      });
-      setJob({ state: 'done', progress: last });
-      addLog(`Sent ${last.chunkCount} chunks (${last.byteCount} bytes)`);
-    } catch (e) {
-      if (e instanceof SendCancelled) {
-        // Stopping the sender isn't enough: the controller would keep drawing what it has
-        // buffered. Halt it, discard its queue and lift the pen.
-        let lifted = false;
-        if (connectionRef.current) {
-          lifted = await stopRobot(connectionRef.current, {
-            firmware: settings.firmware,
-            stopCommand: settings.stopCommand,
-            penUpLine: penUpCommand,
-          })
-            .then((steps) => {
-              addLog(`Stopped: ${steps.join(' → ')}`);
-              return true;
-            })
-            .catch(() => false);
-        }
-        setJob({ state: 'cancelled', progress: last, penLifted: lifted });
-        addLog(lifted ? 'Sending cancelled; pen lifted' : 'Sending cancelled; could not lift pen');
-      } else {
-        const message = e instanceof Error ? e.message : String(e);
-        setJob({ state: 'failed', progress: last, error: message });
-        addLog(`Sending failed: ${message}`);
-      }
+      },
+      userCancelled: () => cancelRef.current,
+      disconnected: () => disconnectedRef.current,
+      onProgress: (progress) => setJob({ state: 'sending', progress }),
+    });
+    const { progress } = result;
+    if (result.state === 'done') {
+      setJob({ state: 'done', progress });
+      addLog(`Sent ${progress.chunkCount} ${progress.unit}s (${progress.byteCount} bytes)`);
+      return;
+    }
+    // Cancelled or failed: the controller may still be drawing what it has buffered. Halt it,
+    // discard its queue and lift the pen — now if still connected, else on reconnect.
+    let lifted = false;
+    if (connectionRef.current && !disconnectedRef.current) {
+      lifted = await stopRobot(connectionRef.current, {
+        firmware: settings.firmware,
+        stopCommand: settings.stopCommand,
+        penUpLine: penUpCommand,
+      })
+        .then((steps) => {
+          addLog(`Stopped: ${steps.join(' → ')}`);
+          return true;
+        })
+        .catch(() => false);
+    }
+    if (!lifted) pendingStopRef.current = penUpCommand;
+    if (result.state === 'cancelled') {
+      setJob({ state: 'cancelled', progress, penLifted: lifted });
+      addLog(lifted ? 'Sending cancelled; pen lifted' : 'Sending cancelled; could not lift pen');
+    } else {
+      setJob({ state: 'failed', progress, error: result.error });
+      addLog(`Sending failed: ${result.error}`);
     }
   }
 
