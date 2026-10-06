@@ -161,7 +161,7 @@ export function layoutText(
   const k = fit.scale;
 
   return {
-    sketch: { width: area.widthMm, height: area.heightMm, strokes: fit.strokes },
+    sketch: { width: area.widthMm, height: area.heightMm, strokes: fit.strokes, fit: 'frame' },
     overflowLines,
     missingChars: [...missing].filter((c) => c.trim()),
     letterHeightMm: letterHeightMm * k,

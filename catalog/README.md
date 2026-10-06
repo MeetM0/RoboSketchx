@@ -11,15 +11,15 @@ export from the app instead — it uses your Plotter settings.
 
 | Preview | Picture | Category | Strokes | Size | Time | G-code |
 | --- | --- | --- | --- | --- | --- | --- |
-| ![Cat](cat.svg) | **Cat** | Animals | 14 | 185×161 mm | ≈ 1 min | [cat.gcode](cat.gcode) |
-| ![Dog](dog.svg) | **Dog** | Animals | 12 | 185×138 mm | ≈ 1 min | [dog.gcode](dog.gcode) |
-| ![Fish](fish.svg) | **Fish** | Animals | 11 | 185×154 mm | ≈ 1 min | [fish.gcode](fish.gcode) |
-| ![Owl](owl.svg) | **Owl** | Animals | 16 | 185×197 mm | ≈ 1 min | [owl.gcode](owl.gcode) |
-| ![Butterfly](butterfly.svg) | **Butterfly** | Animals | 13 | 185×153 mm | ≈ 1 min | [butterfly.gcode](butterfly.gcode) |
-| ![Robot](robot.svg) | **Robot** | Things | 24 | 185×227 mm | ≈ 2 min | [robot.gcode](robot.gcode) |
-| ![Rocket](rocket.svg) | **Rocket** | Things | 15 | 185×216 mm | ≈ 1 min | [rocket.gcode](rocket.gcode) |
-| ![House](house.svg) | **House** | Things | 15 | 186×188 mm | ≈ 1 min | [house.gcode](house.gcode) |
-| ![Car](car.svg) | **Car** | Things | 11 | 186×85 mm | ≈ 1 min | [car.gcode](car.gcode) |
-| ![Ice cream](ice-cream.svg) | **Ice cream** | Things | 10 | 124×271 mm | ≈ 1 min | [ice-cream.gcode](ice-cream.gcode) |
-| ![Flower](flower.svg) | **Flower** | Nature | 11 | 184×257 mm | ≈ 1 min | [flower.gcode](flower.gcode) |
-| ![Sun](sun.svg) | **Sun** | Nature | 18 | 185×185 mm | ≈ 1 min | [sun.gcode](sun.gcode) |
+| ![Cat](cat.svg) | **Cat** | Animals | 14 | 190×165 mm | ≈ 1 min | [cat.gcode](cat.gcode) |
+| ![Dog](dog.svg) | **Dog** | Animals | 12 | 190×141 mm | ≈ 1 min | [dog.gcode](dog.gcode) |
+| ![Fish](fish.svg) | **Fish** | Animals | 11 | 190×158 mm | ≈ 1 min | [fish.gcode](fish.gcode) |
+| ![Owl](owl.svg) | **Owl** | Animals | 16 | 190×203 mm | ≈ 1 min | [owl.gcode](owl.gcode) |
+| ![Butterfly](butterfly.svg) | **Butterfly** | Animals | 13 | 190×157 mm | ≈ 1 min | [butterfly.gcode](butterfly.gcode) |
+| ![Robot](robot.svg) | **Robot** | Things | 24 | 190×233 mm | ≈ 2 min | [robot.gcode](robot.gcode) |
+| ![Rocket](rocket.svg) | **Rocket** | Things | 15 | 190×222 mm | ≈ 1 min | [rocket.gcode](rocket.gcode) |
+| ![House](house.svg) | **House** | Things | 15 | 190×192 mm | ≈ 1 min | [house.gcode](house.gcode) |
+| ![Car](car.svg) | **Car** | Things | 11 | 190×87 mm | ≈ 1 min | [car.gcode](car.gcode) |
+| ![Ice cream](ice-cream.svg) | **Ice cream** | Things | 10 | 127×277 mm | ≈ 1 min | [ice-cream.gcode](ice-cream.gcode) |
+| ![Flower](flower.svg) | **Flower** | Nature | 11 | 190×266 mm | ≈ 1 min | [flower.gcode](flower.gcode) |
+| ![Sun](sun.svg) | **Sun** | Nature | 18 | 190×190 mm | ≈ 1 min | [sun.gcode](sun.gcode) |

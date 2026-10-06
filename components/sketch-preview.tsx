@@ -23,7 +23,7 @@ type Props = {
 export function SketchPreview({ sketch, settings }: Props) {
   const colors = Colors[useColorScheme() ?? 'light'];
   const pathData = useMemo(() => sketchToSvgPathData(sketch), [sketch]);
-  const { scale, offsetX, offsetY } = pixelToPaperTransform(sketch, settings);
+  const { scale, previewOffsetX, previewOffsetY } = pixelToPaperTransform(sketch, settings);
   const { paperWidthMm: w, paperHeightMm: h, marginMm: m } = settings;
 
   return (
@@ -40,7 +40,7 @@ export function SketchPreview({ sketch, settings }: Props) {
           strokeWidth={0.4}
           strokeDasharray="2 2"
         />
-        <G transform={`translate(${offsetX} ${offsetY}) scale(${scale})`}>
+        <G transform={`translate(${previewOffsetX} ${previewOffsetY}) scale(${scale})`}>
           <Path
             d={pathData}
             fill="none"

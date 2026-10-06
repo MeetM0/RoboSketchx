@@ -30,6 +30,12 @@ export type Sketch = {
   height: number;
   /** Strokes in drawing order (already optimised to reduce pen-up travel). */
   strokes: Polyline[];
+  /**
+   * How the sketch is placed on the paper: `strokes` (default) fits and centres the strokes'
+   * bounding box; `frame` fits the whole width × height frame (used when the coordinates are
+   * already a layout in the writing area, e.g. text).
+   */
+  fit?: 'strokes' | 'frame';
 };
 
 export type SketchStats = {
