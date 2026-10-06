@@ -92,3 +92,59 @@ test('P3: traced chains are smoothed before simplification (axis/45° share < 20
   console.log(`  disk (reported only): ${disk.axis}/${disk.segments} = ${r2(disk.share * 100)}%`);
   assert.ok(snoop.share < 0.2, `snoop: ${r2(snoop.share * 100)}%`);
 });
+
+test('P6: thresholds are in mm, so resolution does not change the drawing', () => {
+  const full = sk.resizeImage(snoopScene(768, 1024), 512);
+  const half = downscale(full, 2);
+  const runs = [full, half].map((image) => {
+    const removal = sk.removeBackground(image);
+    const input = removal.ok ? sk.applyMask(image, removal.mask) : image;
+    // mm per traced pixel when this frame is fitted to A4's printable area.
+    const mmPerPx = Math.min(USABLE.w / image.width, USABLE.h / image.height);
+    const sketch = (
+      sk.imageToSketch as (i: sk.RgbaImage, o: sk.SketchOptions, m?: number) => sk.Sketch
+    )(input, sk.DETAIL_PRESETS.medium, mmPerPx);
+    const plan = sk.planPlot({ ...sketch, fit: 'frame' }, S);
+    return {
+      px: `${image.width}×${image.height}`,
+      mmPerPx,
+      strokes: plan.strokeCount,
+      lengthMm: plan.drawLengthMm,
+    };
+  });
+  for (const r of runs)
+    console.log(
+      `  ${r.px}: ${r2(r.mmPerPx)} mm/px → ${r.strokes} strokes, ${r2(r.lengthMm)} mm pen-down`
+    );
+  const [a, b] = runs;
+  assert.ok(
+    Math.abs(a.strokes - b.strokes) / a.strokes <= 0.15,
+    `strokes ${a.strokes} vs ${b.strokes}`
+  );
+  assert.ok(
+    Math.abs(a.lengthMm - b.lengthMm) / a.lengthMm <= 0.1,
+    `length ${r2(a.lengthMm)} vs ${r2(b.lengthMm)}`
+  );
+});
+
+test('P6: every preset threshold is defined in mm and converted with the mm/px scale', () => {
+  const resolve = (sk as unknown as { resolveThresholds?: Function }).resolveThresholds;
+  assert.equal(typeof resolve, 'function', 'resolveThresholds() exists');
+  for (const level of ['low', 'medium', 'high'] as const) {
+    const preset = sk.DETAIL_PRESETS[level] as unknown as Record<string, number>;
+    for (const mmPerPx of [0.25, 0.41, 0.99]) {
+      const px = resolve!(sk.DETAIL_PRESETS[level], mmPerPx) as Record<string, number>;
+      for (const name of ['minStrokeLength', 'simplifyTolerance', 'linkGap']) {
+        const mm = px[`${name}Px`] * mmPerPx;
+        if (name === 'linkGap' && px.linkGapPx === 1.5) continue; // floored at 1.5 px (see source)
+        assert.ok(
+          Math.abs(mm - preset[`${name}Mm`]) < 1e-9,
+          `${level} ${name} at ${mmPerPx} mm/px = ${mm} mm`
+        );
+      }
+    }
+    console.log(
+      `  ${level}: ${JSON.stringify(Object.fromEntries(Object.entries(preset).filter(([k]) => k.endsWith('Mm'))))}`
+    );
+  }
+});

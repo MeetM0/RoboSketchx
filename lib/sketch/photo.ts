@@ -57,7 +57,19 @@ export function photoToSketch(image: RgbaImage, options: PhotoOptions): PhotoSke
     removal = removeBackground(traced);
     if (removal.ok) input = applyMask(traced, removal.mask);
   }
-  return { sketch: imageToSketch(input, DETAIL_PRESETS[options.detail]), traced, crop, removal };
+  // The crop is the subject plus padding, so fitting the traced frame to the printable area
+  // gives the scale the strokes will be drawn at; the preset's mm thresholds use it.
+  const s = options.settings;
+  const mmPerPx = Math.min(
+    (s.paperWidthMm - 2 * s.marginMm) / traced.width,
+    (s.paperHeightMm - 2 * s.marginMm) / traced.height
+  );
+  return {
+    sketch: imageToSketch(input, DETAIL_PRESETS[options.detail], mmPerPx),
+    traced,
+    crop,
+    removal,
+  };
 }
 
 function maskBounds(mask: Uint8Array, width: number, height: number): CropRect {

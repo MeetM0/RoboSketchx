@@ -18,10 +18,12 @@ export type SketchOptions = {
   minContrast: number;
   /** Weak-edge threshold as a fraction of the strong threshold (Canny hysteresis). */
   weakRatio: number;
-  /** Strokes shorter than this (in pixels) are dropped as noise. */
-  minStrokeLength: number;
-  /** Ramer–Douglas–Peucker tolerance in pixels; higher = fewer points per stroke. */
-  simplifyTolerance: number;
+  /** Strokes shorter than this on paper are dropped as noise (mm). */
+  minStrokeLengthMm: number;
+  /** Ramer–Douglas–Peucker tolerance on paper (mm); ≤ 0.05 keeps curves within invariant 8. */
+  simplifyToleranceMm: number;
+  /** Chain ends closer than this on paper that continue each other are joined (mm). */
+  linkGapMm: number;
 };
 
 export type Sketch = {
