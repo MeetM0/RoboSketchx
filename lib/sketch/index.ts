@@ -3,8 +3,9 @@ import { decode } from 'jpeg-js';
 import { detectEdges } from './edges';
 import { orderStrokes, polylineLength, simplify } from './geometry';
 import { traceEdges } from './trace';
-import type { DetailLevel, Sketch, SketchOptions } from './types';
+import type { DetailLevel, RgbaImage, Sketch, SketchOptions } from './types';
 
+export { applyMask, backgroundPathData, removeBackground, type BackgroundRemoval } from './background';
 export * from './export';
 export { computeStats } from './geometry';
 export * from './types';
@@ -36,15 +37,13 @@ export const DETAIL_PRESETS: Record<DetailLevel, SketchOptions> = {
   },
 };
 
-/** Converts raw RGBA pixels into ordered pen strokes. */
+/** Converts an image into ordered pen strokes. */
 export function imageToSketch(
-  rgba: Uint8Array,
-  width: number,
-  height: number,
+  { data, width, height }: RgbaImage,
   options: SketchOptions
 ): Sketch {
   const edges = detectEdges(
-    rgba,
+    data,
     width,
     height,
     options.blurSigma,
@@ -58,13 +57,13 @@ export function imageToSketch(
   return { width, height, strokes: orderStrokes(strokes) };
 }
 
-/** Converts a base64-encoded JPEG into a sketch. */
-export function jpegBase64ToSketch(base64: string, options: SketchOptions): Sketch {
+/** Decodes a base64-encoded JPEG into RGBA pixels. */
+export function decodeJpegBase64(base64: string): RgbaImage {
   const { data, width, height } = decode(base64ToBytes(base64), {
     useTArray: true,
     formatAsRGBA: true,
   });
-  return imageToSketch(data, width, height, options);
+  return { data, width, height };
 }
 
 const BASE64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';

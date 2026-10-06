@@ -1,6 +1,9 @@
 /** A point in image pixel space (origin top-left, y pointing down). */
 export type Point = { x: number; y: number };
 
+/** Decoded image: RGBA bytes, row by row from the top-left. */
+export type RgbaImage = { data: Uint8Array; width: number; height: number };
+
 /** A continuous pen-down stroke. */
 export type Polyline = Point[];
 

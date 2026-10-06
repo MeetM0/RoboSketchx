@@ -35,7 +35,7 @@ function toGrayscale(rgba: Uint8Array, width: number, height: number): Float32Ar
   return out;
 }
 
-function gaussianBlur(src: Float32Array, width: number, height: number, sigma: number) {
+export function gaussianBlur(src: Float32Array, width: number, height: number, sigma: number) {
   const radius = Math.max(1, Math.ceil(sigma * 3));
   const kernel = new Float32Array(radius * 2 + 1);
   let sum = 0;
