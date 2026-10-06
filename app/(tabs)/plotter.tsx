@@ -11,6 +11,11 @@ import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { usePlotterSettings } from '@/lib/plotter-settings';
 
+const PEN_MODE_OPTIONS = [
+  { value: 'z', label: 'Z axis' },
+  { value: 'custom', label: 'Custom commands' },
+] as const;
+
 const FINISH_OPTIONS = [
   { value: 'corner', label: 'Nearest corner' },
   { value: 'stay', label: 'Stay' },
@@ -106,7 +111,7 @@ export default function PlotterScreen() {
                 onCommit={(drawFeedRate) => updateSettings({ drawFeedRate })}
               />
               <NumberField
-                label="Travel"
+                label="Travel (estimate)"
                 unit="mm/min"
                 value={settings.travelFeedRate}
                 min={1}
@@ -126,18 +131,53 @@ export default function PlotterScreen() {
           </Section>
 
           <Section
-            title="Pen commands"
-            hint="G-code sent to lift and lower the pen. Z-axis machines often use G0 Z5 / G1 Z0; servo pen plotters often use M3 S… / M5.">
-            <TextField
-              label="Pen up"
-              value={settings.penUpCommand}
-              onCommit={(penUpCommand) => updateSettings({ penUpCommand })}
+            title="Pen"
+            hint="Z axis: the pen is lifted with G0 Z<up> and lowered with G1 Z<down> at the pen feed. Custom: commands sent as-is (e.g. a servo's M3 S… / M5).">
+            <SegmentedControl
+              options={PEN_MODE_OPTIONS}
+              value={settings.penMode}
+              onChange={(penMode) => updateSettings({ penMode })}
             />
-            <TextField
-              label="Pen down"
-              value={settings.penDownCommand}
-              onCommit={(penDownCommand) => updateSettings({ penDownCommand })}
-            />
+            {settings.penMode === 'z' ? (
+              <View style={styles.row}>
+                <NumberField
+                  label="Up Z"
+                  unit="mm"
+                  value={settings.penUpZ}
+                  min={-100}
+                  max={100}
+                  onCommit={(penUpZ) => updateSettings({ penUpZ })}
+                />
+                <NumberField
+                  label="Down Z"
+                  unit="mm"
+                  value={settings.penDownZ}
+                  min={-100}
+                  max={100}
+                  onCommit={(penDownZ) => updateSettings({ penDownZ })}
+                />
+                <NumberField
+                  label="Pen feed"
+                  unit="mm/min"
+                  value={settings.penFeedRate}
+                  min={1}
+                  onCommit={(penFeedRate) => updateSettings({ penFeedRate })}
+                />
+              </View>
+            ) : (
+              <>
+                <TextField
+                  label="Pen up command"
+                  value={settings.penUpCommand}
+                  onCommit={(penUpCommand) => updateSettings({ penUpCommand })}
+                />
+                <TextField
+                  label="Pen down command"
+                  value={settings.penDownCommand}
+                  onCommit={(penDownCommand) => updateSettings({ penDownCommand })}
+                />
+              </>
+            )}
           </Section>
 
           <View style={styles.row}>

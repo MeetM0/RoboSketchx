@@ -7,7 +7,7 @@ import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { usePlotterSettings } from '@/lib/plotter-settings';
 import { shareTextFile } from '@/lib/share-file';
-import { planPlot, sketchToGcode, sketchToSvg, type Sketch } from '@/lib/sketch';
+import { penUpLine, planPlot, sketchToGcode, sketchToSvg, type Sketch } from '@/lib/sketch';
 
 type Props = {
   sketch: Sketch | null;
@@ -42,7 +42,7 @@ export function SketchActions({ sketch, disabled, fileName, onError }: Props) {
       {sketch && <SketchSummary sketch={sketch} />}
       <SendToRobot
         getGcode={sendable ? () => sketchToGcode(sendable, settings) : null}
-        penUpCommand={settings.penUpCommand}
+        penUpCommand={penUpLine(settings)}
       />
       <View style={styles.row}>
         <Button

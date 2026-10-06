@@ -14,6 +14,8 @@ import { join } from 'path';
 import { CATALOG, pictureToSketch } from '../lib/catalog';
 import {
   DEFAULT_PLOTTER_SETTINGS,
+  penDownLine,
+  penUpLine,
   planPlot,
   sketchToGcode,
   sketchToSvg,
@@ -49,7 +51,7 @@ Ready-made G-code for the pictures in the app's **Draw → Catalog** tab. Genera
 
 These files use the app's default plotter settings: A4 portrait (${settings.paperWidthMm}×${settings.paperHeightMm} mm),
 ${settings.marginMm} mm margin, drawing at ${settings.drawFeedRate} mm/min, travel at ${settings.travelFeedRate} mm/min,
-pen up \`${settings.penUpCommand}\`, pen down \`${settings.penDownCommand}\`, parking at the
+pen up \`${penUpLine(settings)}\`, pen down \`${penDownLine(settings)}\`, parking at the
 nearest paper corner when done. If your robot is different,
 export from the app instead — it uses your Plotter settings.
 

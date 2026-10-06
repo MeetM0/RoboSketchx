@@ -26,15 +26,21 @@ describe('validator unit cases', () => {
   test('a minimal correct file passes', () => {
     assert.deepEqual(validateGcode(GOOD, A4_RULES), []);
   });
-  test('1: F on G0', () => assert.equal(issuesOf(GOOD.replace('G0 X20.00 Y20.00', 'G0 X20.00 Y20.00 F3000'))[1], 1));
-  test('1: pen-down without F', () => assert.ok(issuesOf(GOOD.replace('G1 Z0.00 F500', 'G1 Z0.00'))[1] >= 1));
+  test('1: F on G0', () =>
+    assert.equal(issuesOf(GOOD.replace('G0 X20.00 Y20.00', 'G0 X20.00 Y20.00 F3000'))[1], 1));
+  test('1: pen-down without F', () =>
+    assert.ok(issuesOf(GOOD.replace('G1 Z0.00 F500', 'G1 Z0.00'))[1] >= 1));
   test('1: drawing move inherits the pen feed', () =>
     assert.equal(issuesOf(GOOD.replace('G1 X40.00 Y20.00 F1500', 'G1 X40.00 Y20.00'))[1], 2));
-  test('2: rapid while pen down', () => assert.equal(issuesOf(GOOD.replace('G1 X40.00 Y40.00', 'G0 X40.00 Y40.00'))[2], 1));
-  test('3: missing start position', () => assert.equal(issuesOf(GOOD.replace('G92 X0 Y0\n', ''))[3], 1));
+  test('2: rapid while pen down', () =>
+    assert.equal(issuesOf(GOOD.replace('G1 X40.00 Y40.00', 'G0 X40.00 Y40.00'))[2], 1));
+  test('3: missing start position', () =>
+    assert.equal(issuesOf(GOOD.replace('G92 X0 Y0\n', ''))[3], 1));
   test('4: missing M2', () => assert.ok(issuesOf(GOOD.replace('M2\n', ''))[4] >= 1));
-  test('4: wrong park', () => assert.equal(issuesOf(GOOD.replace('G0 X0.00 Y0.00', 'G0 X210.00 Y297.00'))[4], 1));
-  test('5: outside margin', () => assert.equal(issuesOf(GOOD.replace('G1 X40.00 Y40.00', 'G1 X40.00 Y287.40'))[5], 1));
+  test('4: wrong park', () =>
+    assert.equal(issuesOf(GOOD.replace('G0 X0.00 Y0.00', 'G0 X210.00 Y297.00'))[4], 1));
+  test('5: outside margin', () =>
+    assert.equal(issuesOf(GOOD.replace('G1 X40.00 Y40.00', 'G1 X40.00 Y287.40'))[5], 1));
   test('6: rounding, -0, duplicates, zero length', () => {
     assert.equal(issuesOf(GOOD.replace('X40.00 Y40.00', 'X40.0 Y40.00'))[6], 1);
     assert.equal(issuesOf(GOOD.replace('G0 X0.00 Y0.00', 'G0 X-0.00 Y0.00'))[6], 1);

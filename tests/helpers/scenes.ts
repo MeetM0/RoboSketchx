@@ -6,7 +6,7 @@ import { decode, encode } from 'jpeg-js';
 
 import type { RgbaImage } from '../../lib/sketch/types';
 
-const rng = (seed: number) => () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+const rng = (seed: number) => () => (seed = (seed * 16807) % 2147483647) / 2147483647;
 
 function canvas(width: number, height: number, fill: (x: number, y: number) => number[]) {
   const data = new Uint8Array(width * height * 4);
@@ -42,12 +42,18 @@ export function snoopScene(width = 384, height = 512): RgbaImage {
   return jpegRoundTrip(
     canvas(width, height, (x, y) => {
       const n = (noise() - 0.5) * 22;
-      let c = [120 + y * 0.12 / s, 140 + y * 0.1 / s, 170 - x * 0.05 / s];
-      if (inEllipse(x, y, 140 * s, 250 * s, 34 * s, 70 * s) || inEllipse(x, y, 244 * s, 250 * s, 34 * s, 70 * s))
+      let c = [120 + (y * 0.12) / s, 140 + (y * 0.1) / s, 170 - (x * 0.05) / s];
+      if (
+        inEllipse(x, y, 140 * s, 250 * s, 34 * s, 70 * s) ||
+        inEllipse(x, y, 244 * s, 250 * s, 34 * s, 70 * s)
+      )
         c = [120, 70, 30]; // ears
       if (inEllipse(x, y, 192 * s, 250 * s, 70 * s, 82 * s)) c = [225, 150, 60]; // head
       if (inEllipse(x, y, 192 * s, 300 * s, 34 * s, 22 * s)) c = [245, 215, 170]; // muzzle
-      if (inEllipse(x, y, 168 * s, 236 * s, 8 * s, 10 * s) || inEllipse(x, y, 216 * s, 236 * s, 8 * s, 10 * s))
+      if (
+        inEllipse(x, y, 168 * s, 236 * s, 8 * s, 10 * s) ||
+        inEllipse(x, y, 216 * s, 236 * s, 8 * s, 10 * s)
+      )
         c = [25, 20, 20]; // eyes
       if (inEllipse(x, y, 192 * s, 288 * s, 11 * s, 7 * s)) c = [30, 25, 25]; // nose
       return [c[0] + n, c[1] + n, c[2] + n];

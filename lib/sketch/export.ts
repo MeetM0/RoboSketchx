@@ -1,3 +1,4 @@
+import { DEFAULT_SAMPLING, type ValidationRules } from '../gcode/validate';
 import { joinStrokes, polylineLength } from './geometry';
 import type { Point, Polyline, Sketch } from './types';
 
@@ -9,9 +10,22 @@ export type PlotterSettings = {
   marginMm: number;
   /** Drawing speed (mm/min) while the pen is down. */
   drawFeedRate: number;
-  /** Travel speed (mm/min) while the pen is up. */
+  /**
+   * Pen-up travel speed (mm/min), used only for time estimates: travel is emitted as G0
+   * rapids, which run at the machine's own rapid rate.
+   */
   travelFeedRate: number;
-  /** G-code lines that lift / lower the pen. Depends on the machine (servo vs Z axis). */
+  /**
+   * How the pen is lifted / lowered:
+   * - `z`      — a Z axis: `G0 Z<up>` to lift, `G1 Z<down> F<penFeedRate>` to lower;
+   * - `custom` — free-form commands (e.g. a servo's `M3 S..`), emitted verbatim.
+   */
+  penMode: 'z' | 'custom';
+  penUpZ: number;
+  penDownZ: number;
+  /** Feed (mm/min) for lowering the pen in `z` mode. */
+  penFeedRate: number;
+  /** Commands used in `custom` pen mode. */
   penUpCommand: string;
   penDownCommand: string;
   /**
@@ -30,8 +44,12 @@ export const DEFAULT_PLOTTER_SETTINGS: PlotterSettings = {
   marginMm: 10,
   drawFeedRate: 1500,
   travelFeedRate: 3000,
-  penUpCommand: 'G0 Z5',
-  penDownCommand: 'G1 Z0',
+  penMode: 'z',
+  penUpZ: 5,
+  penDownZ: 0,
+  penFeedRate: 500,
+  penUpCommand: 'M5',
+  penDownCommand: 'M3 S90',
   finishAt: 'corner',
 };
 
@@ -136,24 +154,58 @@ export function planPlot(sketch: Sketch, settings: PlotterSettings): PlotPlan {
 
 const distance = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
 
+/** Fixed 2-decimal number without negative zero. */
+const num = (n: number) => {
+  const text = round(n).toFixed(2);
+  return text === '-0.00' ? '0.00' : text;
+};
+
+export const penUpLine = (s: PlotterSettings) =>
+  s.penMode === 'z' ? `G0 Z${num(s.penUpZ)}` : s.penUpCommand;
+export const penDownLine = (s: PlotterSettings) =>
+  s.penMode === 'z' ? `G1 Z${num(s.penDownZ)} F${s.penFeedRate}` : s.penDownCommand;
+
+/** Validation rules matching these settings (see lib/gcode/validate.ts). */
+export function rulesFor(settings: PlotterSettings): ValidationRules {
+  return {
+    paperWidthMm: settings.paperWidthMm,
+    paperHeightMm: settings.paperHeightMm,
+    marginMm: settings.marginMm,
+    park: { x: 0, y: 0 },
+    pen:
+      settings.penMode === 'z'
+        ? { mode: 'z', upZ: settings.penUpZ, downZ: settings.penDownZ }
+        : {
+            mode: 'custom',
+            upCommand: settings.penUpCommand,
+            downCommand: settings.penDownCommand,
+          },
+    ...DEFAULT_SAMPLING,
+  };
+}
+
 export function sketchToGcode(sketch: Sketch, settings: PlotterSettings): string {
   const plan = planPlot(sketch, settings);
-  const fmt = (p: Point) => `X${round(p.x).toFixed(2)} Y${round(p.y).toFixed(2)}`;
+  const fmt = (p: Point) => `X${num(p.x)} Y${num(p.y)}`;
   const lines = [
     '; RoboSketch',
     `; paper ${settings.paperWidthMm}x${settings.paperHeightMm}mm, margin ${settings.marginMm}mm, ${plan.strokeCount} strokes`,
     'G21 ; millimetres',
     'G90 ; absolute positioning',
-    settings.penUpCommand,
+    penUpLine(settings),
   ];
   for (const stroke of plan.strokes) {
     const [first, ...rest] = stroke;
-    lines.push(`G0 ${fmt(first)} F${settings.travelFeedRate}`);
-    lines.push(settings.penDownCommand);
-    for (const p of rest) lines.push(`G1 ${fmt(p)} F${settings.drawFeedRate}`);
-    lines.push(settings.penUpCommand);
+    // Rapids never carry F (F is modal and would leak into the next G1).
+    lines.push(`G0 ${fmt(first)}`);
+    lines.push(penDownLine(settings));
+    // F is modal: set the drawing feed on the first move after the pen-down feed.
+    rest.forEach((p, i) =>
+      lines.push(`G1 ${fmt(p)}${i === 0 ? ` F${settings.drawFeedRate}` : ''}`)
+    );
+    lines.push(penUpLine(settings));
   }
-  if (plan.park) lines.push(`G0 ${fmt(plan.park)} F${settings.travelFeedRate}`);
+  if (plan.park) lines.push(`G0 ${fmt(plan.park)}`);
   lines.push('');
   return lines.join('\n');
 }

@@ -74,7 +74,10 @@ export function validateGcode(gcode: string, rules: ValidationRules): GcodeIssue
   const lines = gcode.split(/\r?\n/);
   lines.forEach((raw, index) => {
     const n = index + 1;
-    const line = raw.replace(/;.*$/, '').replace(/\(.*?\)/g, '').trim();
+    const line = raw
+      .replace(/;.*$/, '')
+      .replace(/\(.*?\)/g, '')
+      .trim();
     if (!line) return;
     const upper = line.toUpperCase();
     if (/^G21\b/.test(upper)) units = true;
@@ -131,7 +134,8 @@ export function validateGcode(gcode: string, rules: ValidationRules): GcodeIssue
       const isDown = rules.pen.downZ < rules.pen.upZ ? z <= mid : z >= mid;
       penChange = isDown ? 'down' : 'up';
       if (isDown && (g === '0' || g === '00')) add(2, n, 'pen lowered with a rapid G0');
-      if (isDown && g !== '0' && g !== '00' && f === null) add(1, n, 'pen-down G1 Z without an explicit F');
+      if (isDown && g !== '0' && g !== '00' && f === null)
+        add(1, n, 'pen-down G1 Z without an explicit F');
     }
     if (rules.pen.mode === 'custom' && penChange) motions.push({ line: n, text: line });
 
@@ -178,7 +182,11 @@ export function validateGcode(gcode: string, rules: ValidationRules): GcodeIssue
   const parkMatch = park?.text.match(/^G0\s+X(\S+)\s+Y(\S+)$/i);
   if (!parkMatch) add(4, park?.n ?? 0, 'second-to-last command is not a G0 park move');
   else if (Number(parkMatch[1]) !== rules.park.x || Number(parkMatch[2]) !== rules.park.y)
-    add(4, park.n, `park at X${parkMatch[1]} Y${parkMatch[2]}, configured X${rules.park.x} Y${rules.park.y}`);
+    add(
+      4,
+      park.n,
+      `park at X${parkMatch[1]} Y${parkMatch[2]}, configured X${rules.park.x} Y${rules.park.y}`
+    );
   const isPenUp =
     rules.pen.mode === 'custom'
       ? penUp?.text === rules.pen.upCommand
@@ -193,7 +201,8 @@ export function validateGcode(gcode: string, rules: ValidationRules): GcodeIssue
       return;
     }
     const over = Math.max(lo - p.x, p.x - hiX, lo - p.y, p.y - hiY);
-    if (over > 1e-9) add(5, n, `pen-down point X${p.x} Y${p.y} is ${round(over)} mm outside the margin`);
+    if (over > 1e-9)
+      add(5, n, `pen-down point X${p.x} Y${p.y} is ${round(over)} mm outside the margin`);
   }
 }
 
@@ -246,7 +255,11 @@ export function validateAttachments(
     const child = strokes[a.child];
     const parent = strokes[a.parent];
     if (!child || !parent) {
-      issues.push({ invariant: 12, line: 0, message: `attachment ${a.name ?? a.child} refers to a missing stroke` });
+      issues.push({
+        invariant: 12,
+        line: 0,
+        message: `attachment ${a.name ?? a.child} refers to a missing stroke`,
+      });
       continue;
     }
     const ends = a.bothEnds ? [child[0], child[child.length - 1]] : [child[0]];
@@ -265,7 +278,8 @@ export function validateAttachments(
 
 export function distanceToPolyline(p: Point, line: Point[]): number {
   let best = Infinity;
-  for (let i = 1; i < line.length; i++) best = Math.min(best, distanceToSegment(p, line[i - 1], line[i]));
+  for (let i = 1; i < line.length; i++)
+    best = Math.min(best, distanceToSegment(p, line[i - 1], line[i]));
   return line.length === 1 ? dist(p, line[0]) : best;
 }
 
@@ -273,7 +287,9 @@ function distanceToSegment(p: Point, a: Point, b: Point) {
   const dx = b.x - a.x;
   const dy = b.y - a.y;
   const lengthSq = dx * dx + dy * dy;
-  const t = lengthSq ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / lengthSq)) : 0;
+  const t = lengthSq
+    ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / lengthSq))
+    : 0;
   return dist(p, { x: a.x + t * dx, y: a.y + t * dy });
 }
 
