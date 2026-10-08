@@ -123,3 +123,7 @@ error (what happened + what to do + a button), success (brief, dismissible).
 44 × 44 pt minimum targets · labelled controls with roles and states · visible focus ring on
 web · keyboard reachable (web) · colour never the only signal (icons + text) · respects
 system dark mode and text scaling.
+
+Appearance (Robot → Appearance): **System** (default, follows the OS), **Light** or **Dark**;
+remembered across launches (`lib/appearance.tsx`). On phones the choice also switches system
+UI (alerts, keyboard, status bar).

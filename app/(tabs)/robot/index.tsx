@@ -14,11 +14,19 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Row, Section } from '@/components/ui/list';
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { Screen } from '@/components/ui/screen';
+import { Segmented } from '@/components/ui/segmented';
 import { Text } from '@/components/ui/text';
 import { Radius, Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { useAppearance } from '@/lib/appearance';
 import { usePlotterSettings } from '@/lib/plotter-settings';
 import { useRobot } from '@/lib/robot/robot-context';
+
+const APPEARANCE_OPTIONS = [
+  { value: 'system', label: 'System' },
+  { value: 'light', label: 'Light' },
+  { value: 'dark', label: 'Dark' },
+] as const;
 
 /** Robot overview: connection, the current job, setup and recent activity. */
 export default function RobotScreen() {
@@ -26,6 +34,7 @@ export default function RobotScreen() {
   const robot = useRobot();
   const { settings, resetSettings } = usePlotterSettings();
   const { connect, sheet } = useConnectRobot();
+  const appearance = useAppearance();
   const r = robot.settings;
   // Connection events and errors; routine "ok" replies would push them out of view.
   const activity = robot.log.filter((line) => line !== '← ok').slice(-8);
@@ -78,6 +87,15 @@ export default function RobotScreen() {
             onPress={() => router.push('/robot/connection')}
           />
         </Section>
+      </Section>
+
+      <Section title="Appearance">
+        <Segmented
+          label="Appearance"
+          options={APPEARANCE_OPTIONS}
+          value={appearance.preference}
+          onChange={appearance.setPreference}
+        />
       </Section>
 
       {activity.length > 0 && (

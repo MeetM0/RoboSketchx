@@ -5,6 +5,7 @@ import 'react-native-reanimated';
 
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { AppearanceProvider } from '@/lib/appearance';
 import { PlotterSettingsProvider } from '@/lib/plotter-settings';
 import { RobotProvider } from '@/lib/robot/robot-context';
 
@@ -13,6 +14,14 @@ export const unstable_settings = {
 };
 
 export default function RootLayout() {
+  return (
+    <AppearanceProvider>
+      <ThemedApp />
+    </AppearanceProvider>
+  );
+}
+
+function ThemedApp() {
   const colorScheme = useColorScheme();
   const dark = colorScheme === 'dark';
   const palette = Colors[dark ? 'dark' : 'light'];
@@ -39,7 +48,7 @@ export default function RootLayout() {
           </Stack>
         </RobotProvider>
       </PlotterSettingsProvider>
-      <StatusBar style="auto" />
+      <StatusBar style={dark ? 'light' : 'dark'} />
     </ThemeProvider>
   );
 }
