@@ -3,10 +3,12 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { SymbolWeight, SymbolViewProps } from 'expo-symbols';
 import { ComponentProps } from 'react';
-import { OpaqueColorValue, type StyleProp, type TextStyle } from 'react-native';
+import { OpaqueColorValue, View, type StyleProp, type TextStyle } from 'react-native';
+
+import { useHasHydrated } from '@/hooks/use-has-hydrated';
 
 type IconMapping = Record<SymbolViewProps['name'], ComponentProps<typeof MaterialIcons>['name']>;
-type IconSymbolName = keyof typeof MAPPING;
+export type IconSymbolName = keyof typeof MAPPING;
 
 /**
  * Add your SF Symbols to Material Icons mappings here.
@@ -14,10 +16,28 @@ type IconSymbolName = keyof typeof MAPPING;
  * - see SF Symbols in the [SF Symbols](https://developer.apple.com/sf-symbols/) app.
  */
 const MAPPING = {
-  'house.fill': 'home',
+  'pencil.and.outline': 'draw',
+  'gearshape.fill': 'settings',
+  'photo.on.rectangle': 'photo-library',
+  'camera.fill': 'photo-camera',
+  'square.and.arrow.up': 'ios-share',
+  'arrow.counterclockwise': 'refresh',
+  'character.cursor.ibeam': 'text-fields',
+  'antenna.radiowaves.left.and.right': 'bluetooth',
   'paperplane.fill': 'send',
-  'chevron.left.forwardslash.chevron.right': 'code',
+  xmark: 'close',
+  'printer.fill': 'print',
   'chevron.right': 'chevron-right',
+  'chevron.left': 'chevron-left',
+  checkmark: 'check',
+  'checkmark.circle.fill': 'check-circle',
+  'exclamationmark.triangle.fill': 'warning',
+  'exclamationmark.octagon.fill': 'error',
+  'info.circle': 'info-outline',
+  'doc.text': 'description',
+  photo: 'image',
+  'stop.fill': 'stop',
+  ellipsis: 'more-horiz',
 } as IconMapping;
 
 /**
@@ -37,5 +57,9 @@ export function IconSymbol({
   style?: StyleProp<TextStyle>;
   weight?: SymbolWeight;
 }) {
+  // Icon fonts render differently in static web HTML than on the client; hold their space
+  // with an empty box until hydration so the markup matches.
+  const hasHydrated = useHasHydrated();
+  if (!hasHydrated) return <View style={{ width: size, height: size }} />;
   return <MaterialIcons color={color} size={size} name={MAPPING[name]} style={style} />;
 }
