@@ -2,9 +2,10 @@ import { useMemo } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
-import { ThemedText } from '@/components/themed-text';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { focusRing, type PressState } from '@/components/ui/pressable-styles';
+import { Text } from '@/components/ui/text';
+import { Radius, Space } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 import { sketchToSvgPathData } from '@/lib/sketch';
 import { FONTS, layoutText, type FontId } from '@/lib/text/layout';
 
@@ -19,7 +20,7 @@ type Props = {
 /** A 2×2 grid of font cards, each showing a sample written in that font. */
 export function FontPicker({ value, onChange }: Props) {
   return (
-    <View accessibilityRole="radiogroup" style={styles.grid}>
+    <View accessibilityRole="radiogroup" accessibilityLabel="Font" style={styles.grid}>
       {FONTS.map((font) => (
         <FontCard
           key={font.id}
@@ -44,7 +45,7 @@ function FontCard({
   selected: boolean;
   onPress: () => void;
 }) {
-  const colors = Colors[useColorScheme() ?? 'light'];
+  const colors = useTheme();
   const pathData = useMemo(
     () =>
       sketchToSvgPathData(
@@ -63,15 +64,20 @@ function FontCard({
     <Pressable
       accessibilityRole="radio"
       accessibilityLabel={label}
-      accessibilityState={{ selected }}
+      accessibilityState={{ checked: selected }}
       onPress={onPress}
-      style={[
+      style={(state: PressState) => [
         styles.card,
         {
-          backgroundColor: colors.card,
-          borderColor: selected ? colors.tint : colors.border,
-          borderWidth: selected ? 2 : 1,
+          backgroundColor: selected
+            ? colors.accentSubtle
+            : state.pressed
+              ? colors.surfaceMuted
+              : colors.surface,
+          borderColor: selected ? colors.accent : colors.border,
         },
+        selected && styles.selected,
+        focusRing(state, colors),
       ]}>
       <Svg width="100%" height={40} viewBox={`0 0 ${SAMPLE_AREA.widthMm} ${SAMPLE_AREA.heightMm}`}>
         <Path
@@ -83,9 +89,9 @@ function FontCard({
           strokeLinejoin="round"
         />
       </Svg>
-      <ThemedText style={[styles.label, { color: selected ? colors.text : colors.icon }]}>
+      <Text variant="caption" tone={selected ? 'accent' : 'secondary'}>
         {label}
-      </ThemedText>
+      </Text>
     </Pressable>
   );
 }
@@ -94,18 +100,20 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: Space.sm,
   },
   card: {
     flexBasis: '45%',
     flexGrow: 1,
     alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 6,
-    borderRadius: 12,
+    paddingVertical: Space.sm,
+    paddingHorizontal: Space.sm,
+    borderWidth: 1,
+    borderRadius: Radius.card,
   },
-  label: {
-    fontSize: 13,
-    lineHeight: 18,
+  selected: {
+    borderWidth: 2,
+    paddingVertical: Space.sm - 1,
+    paddingHorizontal: Space.sm - 1,
   },
 });

@@ -3,25 +3,30 @@ import React from 'react';
 
 import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useTheme } from '@/hooks/use-theme';
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
+  const colors = useTheme();
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
         headerShown: false,
         tabBarButton: HapticTab,
+        tabBarActiveTintColor: colors.accent,
+        tabBarInactiveTintColor: colors.textSecondary,
+        tabBarStyle: {
+          backgroundColor: colors.surface,
+          borderTopColor: colors.border,
+        },
+        tabBarLabelStyle: { fontWeight: '500' },
       }}>
       <Tabs.Screen
         name="index"
         options={{
           title: 'Draw',
           tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="pencil.and.outline" color={color} />
+            <IconSymbol size={26} name="pencil.and.outline" color={color} />
           ),
         }}
       />
@@ -30,15 +35,15 @@ export default function TabLayout() {
         options={{
           title: 'Write',
           tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="character.cursor.ibeam" color={color} />
+            <IconSymbol size={26} name="character.cursor.ibeam" color={color} />
           ),
         }}
       />
       <Tabs.Screen
-        name="plotter"
+        name="robot"
         options={{
-          title: 'Plotter',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="gearshape.fill" color={color} />,
+          title: 'Robot',
+          tabBarIcon: ({ color }) => <IconSymbol size={26} name="printer.fill" color={color} />,
         }}
       />
     </Tabs>

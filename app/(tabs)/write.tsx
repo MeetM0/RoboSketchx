@@ -1,16 +1,18 @@
 import { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { StyleSheet, TextInput } from 'react-native';
 
 import { FontPicker } from '@/components/font-picker';
-import { NumberField } from '@/components/form-fields';
-import { SegmentedControl } from '@/components/segmented-control';
-import { SketchActions } from '@/components/sketch-actions';
+import { PlotActionBar } from '@/components/plot-action-bar';
+import { StatusPill } from '@/components/robot/status-pill';
 import { SketchPreview } from '@/components/sketch-preview';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { Banner } from '@/components/ui/banner';
+import { FieldRow, NumberField } from '@/components/ui/field';
+import { Section } from '@/components/ui/list';
+import { Workspace } from '@/components/ui/screen';
+import { Segmented } from '@/components/ui/segmented';
+import { Text } from '@/components/ui/text';
+import { Radius, Space, Type } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 import { usePlotterSettings } from '@/lib/plotter-settings';
 import {
   layoutText,
@@ -20,10 +22,10 @@ import {
 } from '@/lib/text/layout';
 
 const SIZE_OPTIONS = [
-  { value: 'fit', label: 'Fit width' },
-  { value: '6', label: 'Small' },
-  { value: '10', label: 'Medium' },
-  { value: '16', label: 'Large' },
+  { value: 'fit', label: 'Fit' },
+  { value: '6', label: 'S' },
+  { value: '10', label: 'M' },
+  { value: '16', label: 'L' },
   { value: 'custom', label: 'Custom' },
 ] as const;
 
@@ -40,31 +42,10 @@ const STYLE_OPTIONS = [
 ] as const;
 
 export default function WriteScreen() {
-  const colors = Colors[useColorScheme() ?? 'light'];
-  const [error, setError] = useState<string | null>(null);
-
-  return (
-    <ThemedView style={styles.screen}>
-      <SafeAreaView edges={['top']} style={styles.screen}>
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <View style={styles.header}>
-            <ThemedText type="title">Write</ThemedText>
-            <ThemedText style={{ color: colors.icon }}>
-              Type a message and the robot writes it out by hand.
-            </ThemedText>
-          </View>
-          <TypeMode onError={setError} />
-          {error && <ThemedText style={styles.error}>{error}</ThemedText>}
-        </ScrollView>
-      </SafeAreaView>
-    </ThemedView>
-  );
-}
-
-function TypeMode({ onError }: { onError: (message: string) => void }) {
-  const colors = Colors[useColorScheme() ?? 'light'];
+  const colors = useTheme();
   const { settings } = usePlotterSettings();
   const [text, setText] = useState('');
+  const [focused, setFocused] = useState(false);
   const [font, setFont] = useState<FontId>('handwriting');
   const [size, setSize] = useState<SizeChoice>('fit');
   const [customSizeMm, setCustomSizeMm] = useState(20);
@@ -89,113 +70,121 @@ function TypeMode({ onError }: { onError: (message: string) => void }) {
       ),
     [text, font, size, customSizeMm, align, style, settings]
   );
+  const hasText = text.trim().length > 0;
 
   return (
-    <>
-      <SketchPreview sketch={layout.sketch} settings={settings} />
-      <TextInput
-        value={text}
-        onChangeText={setText}
-        placeholder="Type what the robot should write…"
-        placeholderTextColor={colors.icon}
-        multiline
-        textAlignVertical="top"
-        style={[
-          styles.textInput,
-          { color: colors.text, backgroundColor: colors.card, borderColor: colors.border },
-        ]}
-      />
-      {layout.overflowLines > 0 && (
-        <ThemedText style={[styles.note, styles.warning]}>
-          {layout.overflowLines} line{layout.overflowLines === 1 ? '' : 's'} won&apos;t fit on the
-          page. Use a smaller size or a bigger sheet.
-        </ThemedText>
-      )}
-      {layout.missingChars.length > 0 && (
-        <ThemedText style={[styles.note, { color: colors.icon }]}>
-          Skipped characters this font can&apos;t write: {layout.missingChars.join(' ')}
-        </ThemedText>
-      )}
+    <Workspace
+      title="Write"
+      headerRight={<StatusPill />}
+      stage={
+        <SketchPreview
+          sketch={hasText ? layout.sketch : null}
+          settings={settings}
+          label={hasText ? `"${text}" written on the paper` : 'Empty paper'}
+          overlay={
+            hasText ? null : (
+              <Text variant="secondary" tone="tertiary">
+                Your text appears here
+              </Text>
+            )
+          }
+        />
+      }
+      footer={
+        <PlotActionBar
+          sketch={hasText ? layout.sketch : null}
+          emptyHint="Type a message to write."
+          fileName="robosketch-text"
+        />
+      }>
+      <Section title="Message">
+        <TextInput
+          accessibilityLabel="Message"
+          value={text}
+          onChangeText={setText}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          placeholder="Type what the robot should write"
+          placeholderTextColor={colors.textTertiary}
+          multiline
+          textAlignVertical="top"
+          style={[
+            styles.message,
+            {
+              color: colors.text,
+              backgroundColor: colors.surface,
+              borderColor: focused ? colors.accent : colors.borderStrong,
+            },
+            focused && styles.messageFocused,
+          ]}
+        />
+        {layout.overflowLines > 0 && (
+          <Banner
+            tone="warning"
+            message={`${layout.overflowLines} line${layout.overflowLines === 1 ? '' : 's'} won't fit on the paper. Choose a smaller size or larger paper.`}
+          />
+        )}
+        {layout.missingChars.length > 0 && (
+          <Banner
+            tone="info"
+            message={`This font can't write ${layout.missingChars.join(' ')}, so ${layout.missingChars.length === 1 ? 'it is' : 'they are'} skipped.`}
+          />
+        )}
+      </Section>
 
-      <View style={styles.section}>
-        <ThemedText type="defaultSemiBold">Style</ThemedText>
+      <Section title="Font">
         <FontPicker value={font} onChange={setFont} />
-        <SegmentedControl options={STYLE_OPTIONS} value={style} onChange={setStyle} />
-      </View>
-      <View style={styles.section}>
-        <ThemedText type="defaultSemiBold">Letter size</ThemedText>
-        <SegmentedControl options={SIZE_OPTIONS} value={size} onChange={setSize} />
+        <Segmented label="Letter style" options={STYLE_OPTIONS} value={style} onChange={setStyle} />
+        <Text variant="caption" tone="secondary">
+          {style === 'natural'
+            ? 'Natural varies each letter slightly, like real handwriting.'
+            : 'Neat draws every letter identically.'}
+        </Text>
+      </Section>
+
+      <Section title="Size">
+        <Segmented label="Letter size" options={SIZE_OPTIONS} value={size} onChange={setSize} />
         {size === 'custom' && (
-          <View style={styles.row}>
+          <FieldRow>
             <NumberField
-              label="Capital letter height"
+              label="Capital height"
               unit="mm"
               value={customSizeMm}
               min={1}
               max={200}
               onCommit={setCustomSizeMm}
             />
-          </View>
+          </FieldRow>
         )}
-        <ThemedText style={[styles.note, { color: colors.icon }]}>
+        <Text variant="caption" tone="secondary">
+          {size === 'fit'
+            ? `Longest line fills the width, up to ${MAX_FIT_LETTER_HEIGHT_MM} mm capitals. `
+            : ''}
           Capitals {layout.letterHeightMm.toFixed(1)} mm · lowercase {layout.xHeightMm.toFixed(1)}{' '}
           mm
-          {size === 'fit'
-            ? ` · the longest line fills the page width (up to ${MAX_FIT_LETTER_HEIGHT_MM} mm capitals)`
-            : ''}
-        </ThemedText>
-      </View>
-      <View style={styles.section}>
-        <ThemedText type="defaultSemiBold">Alignment</ThemedText>
-        <SegmentedControl options={ALIGN_OPTIONS} value={align} onChange={setAlign} />
-      </View>
+        </Text>
+      </Section>
 
-      <SketchActions
-        sketch={text.trim() ? layout.sketch : null}
-        fileName="robosketch-text"
-        onError={onError}
-      />
-    </>
+      <Section title="Alignment">
+        <Segmented label="Alignment" options={ALIGN_OPTIONS} value={align} onChange={setAlign} />
+      </Section>
+    </Workspace>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-  },
-  content: {
-    padding: 20,
-    gap: 16,
-    width: '100%',
-    maxWidth: 640,
-    alignSelf: 'center',
-  },
-  header: {
-    gap: 4,
-    marginBottom: 4,
-  },
-  row: {
-    flexDirection: 'row',
-  },
-  section: {
-    gap: 8,
-  },
-  textInput: {
-    minHeight: 120,
+  message: {
+    minHeight: 112,
     borderWidth: 1,
-    borderRadius: 12,
-    padding: 12,
-    fontSize: 16,
-    lineHeight: 22,
-  },
-  note: {
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  warning: {
-    color: '#B26A00',
-  },
-  error: {
-    color: '#D93025',
+    borderRadius: Radius.control,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm + 2,
+    ...Type.body,
+    outlineStyle: 'none',
+  } as object,
+  messageFocused: {
+    borderWidth: 2,
+    paddingHorizontal: Space.md - 1,
+    paddingVertical: Space.sm + 1,
   },
 });

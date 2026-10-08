@@ -2,8 +2,7 @@ import { useMemo } from 'react';
 import { StyleSheet } from 'react-native';
 import Svg, { G, Path } from 'react-native-svg';
 
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useTheme } from '@/hooks/use-theme';
 import { backgroundPathData, type CropRect } from '@/lib/sketch';
 
 type Props = {
@@ -30,7 +29,7 @@ export function BackgroundOverlay({
   maskWidth,
   maskHeight,
 }: Props) {
-  const colors = Colors[useColorScheme() ?? 'light'];
+  const colors = useTheme();
   const maskPath = useMemo(
     () => (mask ? backgroundPathData(mask, maskWidth, maskHeight) : ''),
     [mask, maskWidth, maskHeight]

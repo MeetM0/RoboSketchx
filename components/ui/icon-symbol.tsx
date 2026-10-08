@@ -26,6 +26,18 @@ const MAPPING = {
   'antenna.radiowaves.left.and.right': 'bluetooth',
   'paperplane.fill': 'send',
   xmark: 'close',
+  'printer.fill': 'print',
+  'chevron.right': 'chevron-right',
+  'chevron.left': 'chevron-left',
+  checkmark: 'check',
+  'checkmark.circle.fill': 'check-circle',
+  'exclamationmark.triangle.fill': 'warning',
+  'exclamationmark.octagon.fill': 'error',
+  'info.circle': 'info-outline',
+  'doc.text': 'description',
+  photo: 'image',
+  'stop.fill': 'stop',
+  ellipsis: 'more-horiz',
 } as IconMapping;
 
 /**

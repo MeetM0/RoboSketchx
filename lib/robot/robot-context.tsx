@@ -47,6 +47,8 @@ type RobotContextValue = {
   /** Sends G-code; `penUpCommand` is sent if the job is cancelled so the pen doesn't drag. */
   send: (gcode: string, penUpCommand: string) => Promise<void>;
   cancel: () => void;
+  /** Hides the last job's outcome (not while sending). */
+  dismissJob: () => void;
 };
 
 const RobotContext = createContext<RobotContextValue | null>(null);
@@ -289,6 +291,7 @@ export function RobotProvider({ children }: PropsWithChildren) {
         cancel: () => {
           cancelRef.current = true;
         },
+        dismissJob: () => setJob((current) => (current?.state === 'sending' ? current : null)),
       }}>
       {children}
     </RobotContext.Provider>

@@ -44,9 +44,9 @@ Web Bluetooth. The iOS simulator has no Bluetooth; use a real phone.
 
 | Path | What it is |
 | --- | --- |
-| `app/(tabs)/index.tsx` | **Draw** screen: cartoon catalog, or trace your own photo |
+| `app/(tabs)/index.tsx` | **Draw** screen: Gallery (cartoon catalog) or Photo (trace your own) |
 | `app/(tabs)/write.tsx` | **Write** screen: type text for the robot to write |
-| `app/(tabs)/plotter.tsx` | **Plotter** screen: paper size, margin, speeds, pen up/down G-code |
+| `app/(tabs)/robot/` | **Robot** tab: connection and current job, then Paper / Pen / Motion / Connection settings pages |
 | `lib/catalog/` | Cartoon catalog: `pictures.ts` (SVG path artwork) and an SVG path → strokes flattener |
 | `catalog/` | Ready-made `.gcode` + `.svg` per cartoon for A4 (`npm run export-catalog`) |
 | `lib/sketch/` | The photo → strokes engine (pure TypeScript, no React) |
@@ -54,13 +54,12 @@ Web Bluetooth. The iOS simulator has no Bluetooth; use a real phone.
 | `scripts/build-fonts.js` | Regenerates `lib/text/font-data.ts` from the `hersheytext` fonts (`npm run build-fonts`) |
 | `lib/prepare-photo.ts` | Downscales the picked photo to 512px and returns it as JPEG base64 |
 | `lib/robot/` | Bluetooth: chunking protocol, sender with flow control, native + web BLE links, connection context |
-| `components/robot-panel.tsx` | Plotter tab: find / connect the robot, Bluetooth settings, robot replies |
-| `components/send-to-robot.tsx` | "Send to robot" button with chunk progress and cancel |
+| `components/plot-action-bar.tsx` | Bottom action bar: drawing summary, Connect → Send → Stop, progress, outcome, export sheet |
+| `components/robot/` | Robot status pill, connect flow, status wording |
+| `components/ui/` | Design-system components (see `docs/DESIGN.md`); tokens in `constants/theme.ts` |
 | `lib/plotter-settings.tsx` | Plotter settings context, persisted with AsyncStorage |
 | `lib/share-file.ts` / `.web.ts` | Share sheet on native, file download on web |
-| `components/catalog-browser.tsx` | Catalog grid with category filter and preview |
-| `components/sketch-actions.tsx` | Stroke count / size / time summary and the export buttons |
-| `components/sketch-preview.tsx` | Draws the strokes on the configured paper with react-native-svg |
+| `components/sketch-preview.tsx` | Draws the strokes on the configured paper, fitted to its container |
 | `components/background-overlay.tsx` | Fades the removed background over the photo |
 
 ## Cartoon catalog (`lib/catalog`)
@@ -68,7 +67,7 @@ Web Bluetooth. The iOS simulator has no Bluetooth; use a real phone.
 Each picture is a list of SVG path strings in a 100 × 100 box, drawn as single pen lines.
 `flattenPath` turns curves and arcs into short straight moves, and `pictureToSketch` orders the
 strokes and crops them so the drawing fills the paper. The app generates G-code for your
-current Plotter settings; `npm run export-catalog` also writes ready-made A4 files to
+current Robot settings; `npm run export-catalog` also writes ready-made A4 files to
 `catalog/`. To add a picture, append it to `CATALOG` in `lib/catalog/pictures.ts` and re-run
 the export.
 
@@ -111,7 +110,7 @@ plot pass draws each connected run as one pen-down stroke.
 
 | | Default | Setting |
 | --- | --- | --- |
-| Service | Nordic UART Service `6e400001-b5a3-f393-e0a9-e50e24dcca9e` | Plotter → Bluetooth settings |
+| Service | Nordic UART Service `6e400001-b5a3-f393-e0a9-e50e24dcca9e` | Robot → Connection |
 | RX (app → robot, write with response) | `6e400002-b5a3-f393-e0a9-e50e24dcca9e` | ″ |
 | TX (robot → app, notify; optional) | `6e400003-b5a3-f393-e0a9-e50e24dcca9e` | ″ |
 | MTU requested | **400** → chunks of up to **397 bytes** (MTU − 3-byte ATT header) | ″ |
