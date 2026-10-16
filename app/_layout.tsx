@@ -3,22 +3,52 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
+import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { AppearanceProvider } from '@/lib/appearance';
+import { PlotterSettingsProvider } from '@/lib/plotter-settings';
+import { RobotProvider } from '@/lib/robot/robot-context';
 
 export const unstable_settings = {
   anchor: '(tabs)',
 };
 
 export default function RootLayout() {
+  return (
+    <AppearanceProvider>
+      <ThemedApp />
+    </AppearanceProvider>
+  );
+}
+
+function ThemedApp() {
   const colorScheme = useColorScheme();
+  const dark = colorScheme === 'dark';
+  const palette = Colors[dark ? 'dark' : 'light'];
+  const base = dark ? DarkTheme : DefaultTheme;
+  const navigationTheme = {
+    ...base,
+    colors: {
+      ...base.colors,
+      primary: palette.accent,
+      background: palette.bg,
+      card: palette.surface,
+      text: palette.text,
+      border: palette.border,
+      notification: palette.danger,
+    },
+  };
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-      </Stack>
-      <StatusBar style="auto" />
+    <ThemeProvider value={navigationTheme}>
+      <PlotterSettingsProvider>
+        <RobotProvider>
+          <Stack>
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          </Stack>
+        </RobotProvider>
+      </PlotterSettingsProvider>
+      <StatusBar style={dark ? 'light' : 'dark'} />
     </ThemeProvider>
   );
 }

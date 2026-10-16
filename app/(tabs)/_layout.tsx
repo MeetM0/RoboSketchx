@@ -3,31 +3,47 @@ import React from 'react';
 
 import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useTheme } from '@/hooks/use-theme';
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
+  const colors = useTheme();
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
         headerShown: false,
         tabBarButton: HapticTab,
+        tabBarActiveTintColor: colors.accent,
+        tabBarInactiveTintColor: colors.textSecondary,
+        tabBarStyle: {
+          backgroundColor: colors.surface,
+          borderTopColor: colors.border,
+        },
+        tabBarLabelStyle: { fontWeight: '500' },
       }}>
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
+          title: 'Draw',
+          tabBarIcon: ({ color }) => (
+            <IconSymbol size={26} name="pencil.and.outline" color={color} />
+          ),
         }}
       />
       <Tabs.Screen
-        name="explore"
+        name="write"
         options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
+          title: 'Write',
+          tabBarIcon: ({ color }) => (
+            <IconSymbol size={26} name="character.cursor.ibeam" color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="robot"
+        options={{
+          title: 'Robot',
+          tabBarIcon: ({ color }) => <IconSymbol size={26} name="printer.fill" color={color} />,
         }}
       />
     </Tabs>
