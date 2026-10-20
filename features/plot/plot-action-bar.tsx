@@ -2,29 +2,23 @@ import { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useConnectRobot } from '@/components/robot/connect';
-import { describeJob, jobFraction } from '@/components/robot/status';
 import { Banner } from '@/components/ui/banner';
-import { IconSymbol, type IconSymbolName } from '@/components/ui/icon-symbol';
 import { Button, IconButton } from '@/components/ui/button';
+import { IconSymbol, type IconSymbolName } from '@/components/ui/icon-symbol';
 import { Row, Section } from '@/components/ui/list';
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { useIsWide } from '@/components/ui/screen';
 import { Sheet } from '@/components/ui/sheet';
 import { Text } from '@/components/ui/text';
 import { Layout, Space } from '@/constants/theme';
+import { useConnectRobot } from '@/features/robot/connect';
+import { describeJob, jobFraction } from '@/features/robot/status';
 import { useTheme } from '@/hooks/use-theme';
 import type { Sketch } from '@/lib/geometry';
+import { penUpLine, planPlot, sketchToGcode, sketchToSvg, type PlotterSettings } from '@/lib/plot';
+import { shareTextFile } from '@/platform/share-file';
 import { usePlotterSettings } from '@/state/plotter-settings';
 import { useRobot } from '@/state/robot';
-import { shareTextFile } from '@/platform/share-file';
-import {
-  penUpLine,
-  planPlot,
-  sketchToGcode,
-  sketchToSvg,
-  type PlotterSettings,
-} from '@/lib/plot';
 
 const OUTCOME_ICONS: Record<'success' | 'warning' | 'error', IconSymbolName> = {
   success: 'checkmark.circle.fill',

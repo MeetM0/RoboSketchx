@@ -6,11 +6,7 @@ import { Text } from '@/components/ui/text';
 import { Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { Sketch } from '@/lib/geometry';
-import {
-  pixelToPaperTransform,
-  sketchToSvgPathData,
-  type PlotterSettings,
-} from '@/lib/plot';
+import { pixelToPaperTransform, sketchToSvgPathData, type PlotterSettings } from '@/lib/plot';
 
 /** Pen tip width used for the on-screen preview, in millimetres. */
 const PEN_WIDTH_MM = 0.5;

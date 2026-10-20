@@ -4,10 +4,9 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { focusRing, type PressState } from '@/components/ui/pressable-styles';
 import { Text } from '@/components/ui/text';
 import { Layout, Radius, Space, type Palette } from '@/constants/theme';
+import { describeRobot, type StatusTone } from '@/features/robot/status';
 import { useTheme } from '@/hooks/use-theme';
 import { useRobot } from '@/state/robot';
-
-import { describeRobot, type StatusTone } from './status';
 
 const DOT: Record<StatusTone, keyof Palette> = {
   neutral: 'textTertiary',

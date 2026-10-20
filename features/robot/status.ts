@@ -1,5 +1,5 @@
-import type { RobotStatus, SendJob } from '@/state/robot';
 import type { PlotterSettings } from '@/lib/plot';
+import type { RobotStatus, SendJob } from '@/state/robot';
 
 export type StatusTone = 'neutral' | 'progress' | 'success' | 'warning' | 'danger';
 

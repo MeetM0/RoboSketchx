@@ -1,7 +1,8 @@
 /**
  * G-code validator. Checks the plotter invariants on finished G-code text (and, for
  * invariant 12, on drawings with declared attachments). Every problem is reported; nothing
- * is fixed here — the app blocks export / sending while any error remains.
+ * is fixed here. The tests run it on every generated program; the app does not yet check
+ * before export / sending (audit item G4).
  *
  * Invariants checked:
  *  1. No F on G0. Pen-down Z moves are G1 with an explicit F. Drawing moves run at a feed
