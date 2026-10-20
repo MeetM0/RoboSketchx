@@ -1,7 +1,7 @@
+import type { DetailLevel, RgbaImage, Sketch } from '../../geometry/types';
+import type { PlotterSettings } from '../../plot/settings';
 import { applyMask, removeBackground, type BackgroundRemoval } from './background';
-import type { PlotterSettings } from './export';
-import { DETAIL_PRESETS, imageToSketch } from './index';
-import type { DetailLevel, RgbaImage, Sketch } from './types';
+import { DETAIL_PRESETS, imageToSketch } from './pipeline';
 
 /** Longest side of the photo the app decodes (crop source). */
 export const PHOTO_WORK_SIZE = 1024;

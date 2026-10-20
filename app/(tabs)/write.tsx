@@ -13,13 +13,13 @@ import { Segmented } from '@/components/ui/segmented';
 import { Text } from '@/components/ui/text';
 import { Radius, Space, Type } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { usePlotterSettings } from '@/lib/plotter-settings';
+import { usePlotterSettings } from '@/state/plotter-settings';
 import {
   layoutText,
   MAX_FIT_LETTER_HEIGHT_MM,
   type FontId,
   type TextLayoutOptions,
-} from '@/lib/text/layout';
+} from '@/lib/sources/text/layout';
 
 const SIZE_OPTIONS = [
   { value: 'fit', label: 'Fit' },

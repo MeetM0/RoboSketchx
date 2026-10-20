@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useColorScheme as useSystemColorScheme } from 'react-native';
 
-import { useAppearance } from '@/lib/appearance';
+import { useAppearance } from '@/state/appearance';
 
 /**
  * The colour scheme in use: the person's choice, or the system's when they follow it.

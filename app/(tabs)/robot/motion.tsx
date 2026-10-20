@@ -3,7 +3,7 @@ import { useBackToRobot } from '@/components/robot/use-back';
 import { FieldRow, NumberField } from '@/components/ui/field';
 import { OptionList, Section } from '@/components/ui/list';
 import { Screen } from '@/components/ui/screen';
-import { usePlotterSettings } from '@/lib/plotter-settings';
+import { usePlotterSettings } from '@/state/plotter-settings';
 
 const START_OPTIONS = [
   {

@@ -14,17 +14,17 @@ import { Sheet } from '@/components/ui/sheet';
 import { Text } from '@/components/ui/text';
 import { Layout, Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { usePlotterSettings } from '@/lib/plotter-settings';
-import { useRobot } from '@/lib/robot/robot-context';
-import { shareTextFile } from '@/lib/share-file';
+import type { Sketch } from '@/lib/geometry';
+import { usePlotterSettings } from '@/state/plotter-settings';
+import { useRobot } from '@/state/robot';
+import { shareTextFile } from '@/platform/share-file';
 import {
   penUpLine,
   planPlot,
   sketchToGcode,
   sketchToSvg,
   type PlotterSettings,
-  type Sketch,
-} from '@/lib/sketch';
+} from '@/lib/plot';
 
 const OUTCOME_ICONS: Record<'success' | 'warning' | 'error', IconSymbolName> = {
   success: 'checkmark.circle.fill',

@@ -5,7 +5,7 @@ import { focusRing, type PressState } from '@/components/ui/pressable-styles';
 import { Text } from '@/components/ui/text';
 import { Layout, Radius, Space, type Palette } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { useRobot } from '@/lib/robot/robot-context';
+import { useRobot } from '@/state/robot';
 
 import { describeRobot, type StatusTone } from './status';
 

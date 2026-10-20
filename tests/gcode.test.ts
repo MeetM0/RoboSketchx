@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { countByInvariant, validateGcode } from '../lib/gcode/validate';
-import { DEFAULT_PLOTTER_SETTINGS, rulesFor, sketchToGcode } from '../lib/sketch/export';
-import type { Sketch } from '../lib/sketch/types';
+import { countByInvariant, validateGcode } from '../lib/plot/validate';
+import { DEFAULT_PLOTTER_SETTINGS, rulesFor, sketchToGcode } from '../lib/plot';
+import type { Sketch } from '../lib/geometry/types';
 
 // Two straight strokes (no curves), well inside the page once fitted.
 const SKETCH: Sketch = {

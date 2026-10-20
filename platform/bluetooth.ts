@@ -2,9 +2,9 @@ import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { PermissionsAndroid, Platform } from 'react-native';
 import { BleManager, State, type Device } from 'react-native-ble-plx';
 
-import { base64ToBytes } from '../sketch';
-import type { RobotConnection, RobotLink } from './link-types';
-import { bytesToBase64, bytesToText, type RobotSettings } from './protocol';
+import { base64ToBytes } from '@/lib/base64';
+import type { RobotConnection, RobotLink } from '@/lib/robot/link-types';
+import { bytesToBase64, bytesToText, type RobotSettings } from '@/lib/robot/protocol';
 
 let manager: BleManager | null = null;
 

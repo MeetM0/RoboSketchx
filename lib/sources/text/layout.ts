@@ -1,5 +1,5 @@
-import { JOIN_GAP_MM } from '../sketch/export';
-import type { Point, Polyline, Sketch } from '../sketch/types';
+import { JOIN_GAP_MM } from '../../plot/plan';
+import type { Point, Polyline, Sketch } from '../../geometry/types';
 
 import { FONT_DATA } from './font-data';
 import type { StrokeFont } from './types';

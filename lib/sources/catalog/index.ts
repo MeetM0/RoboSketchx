@@ -1,5 +1,5 @@
-import { orderStrokes } from '../sketch/geometry';
-import type { Sketch } from '../sketch/types';
+import { orderStrokes } from '../../geometry/polyline';
+import type { Sketch } from '../../geometry/types';
 import { CATALOG, type CatalogPicture } from './pictures';
 import { flattenPath } from './svg-path';
 

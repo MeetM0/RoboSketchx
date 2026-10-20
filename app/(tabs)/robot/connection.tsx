@@ -8,7 +8,7 @@ import { OptionList, Section } from '@/components/ui/list';
 import { Screen } from '@/components/ui/screen';
 import { Segmented } from '@/components/ui/segmented';
 import { ATT_HEADER_BYTES, type AckMode } from '@/lib/robot/protocol';
-import { useRobot } from '@/lib/robot/robot-context';
+import { useRobot } from '@/state/robot';
 
 const FIRMWARE_OPTIONS = [
   {

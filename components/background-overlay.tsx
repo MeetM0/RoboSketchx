@@ -3,7 +3,7 @@ import { StyleSheet } from 'react-native';
 import Svg, { G, Path } from 'react-native-svg';
 
 import { useTheme } from '@/hooks/use-theme';
-import { backgroundPathData, type CropRect } from '@/lib/sketch';
+import { backgroundPathData, type CropRect } from '@/lib/sources/photo';
 
 type Props = {
   /** Size of the photo the overlay sits on (the decoded working image). */

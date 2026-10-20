@@ -8,12 +8,12 @@ import {
   type PropsWithChildren,
 } from 'react';
 
-import { robotLink } from './link';
-import type { FoundRobot, RobotConnection } from './link-types';
-import { chunkPayload, DEFAULT_ROBOT_SETTINGS, type RobotSettings } from './protocol';
-import { recoverOnConnect, runJob } from './job';
-import { type SendProgress } from './sender';
-import { stopRobot } from './stop';
+import { robotLink } from '@/platform/bluetooth';
+import type { FoundRobot, RobotConnection } from '@/lib/robot/link-types';
+import { chunkPayload, DEFAULT_ROBOT_SETTINGS, type RobotSettings } from '@/lib/robot/protocol';
+import { recoverOnConnect, runJob } from '@/lib/robot/job';
+import { type SendProgress } from '@/lib/robot/sender';
+import { stopRobot } from '@/lib/robot/stop';
 
 const STORAGE_KEY = 'robosketch.robotSettings.v1';
 const SCAN_DURATION_MS = 12_000;

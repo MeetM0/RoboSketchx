@@ -1,5 +1,5 @@
-import type { RobotConnection, RobotLink } from './link-types';
-import { bytesToText, type RobotSettings } from './protocol';
+import type { RobotConnection, RobotLink } from '@/lib/robot/link-types';
+import { bytesToText, type RobotSettings } from '@/lib/robot/protocol';
 
 // Minimal Web Bluetooth typings (not part of TypeScript's DOM library yet).
 type WebCharacteristic = EventTarget & {

@@ -18,9 +18,9 @@ import { Segmented } from '@/components/ui/segmented';
 import { Text } from '@/components/ui/text';
 import { Radius, Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { useAppearance } from '@/lib/appearance';
-import { usePlotterSettings } from '@/lib/plotter-settings';
-import { useRobot } from '@/lib/robot/robot-context';
+import { useAppearance } from '@/state/appearance';
+import { usePlotterSettings } from '@/state/plotter-settings';
+import { useRobot } from '@/state/robot';
 
 const APPEARANCE_OPTIONS = [
   { value: 'system', label: 'System' },

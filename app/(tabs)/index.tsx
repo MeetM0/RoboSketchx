@@ -18,25 +18,24 @@ import { Segmented } from '@/components/ui/segmented';
 import { Text } from '@/components/ui/text';
 import { Radius, Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import type { DetailLevel, RgbaImage } from '@/lib/geometry';
 import {
   CATALOG,
   CATALOG_CATEGORIES,
   pictureToSketch,
   type CatalogCategory,
   type CatalogPicture,
-} from '@/lib/catalog';
-import { usePlotterSettings } from '@/lib/plotter-settings';
-import { pickImage, type PickedImage } from '@/lib/pick-image';
-import { preparePhoto } from '@/lib/prepare-photo';
+} from '@/lib/sources/catalog';
+import { usePlotterSettings } from '@/state/plotter-settings';
+import { pickImage, type PickedImage } from '@/platform/pick-image';
+import { preparePhoto } from '@/platform/prepare-photo';
 import {
   decodeJpegBase64,
   PHOTO_WORK_SIZE,
   photoToSketch,
   type BackgroundRemoval,
-  type DetailLevel,
   type PhotoSketch,
-  type RgbaImage,
-} from '@/lib/sketch';
+} from '@/lib/sources/photo';
 
 const MODE_OPTIONS = [
   { value: 'gallery', label: 'Gallery' },

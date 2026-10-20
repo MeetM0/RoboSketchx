@@ -1,4 +1,4 @@
-import type { Point, Polyline } from './types';
+import type { Point, Polyline } from '../../geometry/types';
 
 // 8-connected neighbours, orthogonal first so traced lines prefer straight steps.
 const NEIGHBOURS = [

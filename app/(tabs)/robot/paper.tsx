@@ -10,7 +10,7 @@ import { Screen } from '@/components/ui/screen';
 import { Segmented } from '@/components/ui/segmented';
 import { Radius } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { usePlotterSettings } from '@/lib/plotter-settings';
+import { usePlotterSettings } from '@/state/plotter-settings';
 
 const PRESETS = [
   { value: 'A4', label: 'A4', short: 210, long: 297 },

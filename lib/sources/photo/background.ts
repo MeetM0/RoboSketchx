@@ -1,6 +1,6 @@
 import { gaussianBlur } from './edges';
 import { dilate, erode, labelRegions } from './morphology';
-import type { RgbaImage } from './types';
+import type { RgbaImage } from '../../geometry/types';
 
 export type BackgroundRemoval =
   | {

@@ -1,4 +1,4 @@
-import type { Point, Polyline } from '../sketch/types';
+import type { Point, Polyline } from '../../geometry/types';
 
 /**
  * Converts SVG path data into pen strokes (polylines). Supports every path command

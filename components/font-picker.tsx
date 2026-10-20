@@ -6,8 +6,8 @@ import { focusRing, type PressState } from '@/components/ui/pressable-styles';
 import { Text } from '@/components/ui/text';
 import { Radius, Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { sketchToSvgPathData } from '@/lib/sketch';
-import { FONTS, layoutText, type FontId } from '@/lib/text/layout';
+import { sketchToSvgPathData } from '@/lib/plot';
+import { FONTS, layoutText, type FontId } from '@/lib/sources/text/layout';
 
 const SAMPLE = 'Hello';
 const SAMPLE_AREA = { widthMm: 60, heightMm: 16 };

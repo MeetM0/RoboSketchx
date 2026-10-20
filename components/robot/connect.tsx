@@ -8,7 +8,7 @@ import { Sheet } from '@/components/ui/sheet';
 import { Text } from '@/components/ui/text';
 import { Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { useRobot } from '@/lib/robot/robot-context';
+import { useRobot } from '@/state/robot';
 
 const isWeb = process.env.EXPO_OS === 'web';
 

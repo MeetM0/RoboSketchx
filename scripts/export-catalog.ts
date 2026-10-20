@@ -11,7 +11,7 @@
 import { mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
-import { CATALOG, pictureToSketch } from '../lib/catalog';
+import { CATALOG, pictureToSketch } from '../lib/sources/catalog';
 import {
   DEFAULT_PLOTTER_SETTINGS,
   penDownLine,
@@ -19,7 +19,7 @@ import {
   planPlot,
   sketchToGcode,
   sketchToSvg,
-} from '../lib/sketch/export';
+} from '../lib/plot';
 
 const outDir = join(__dirname, '..', 'catalog');
 mkdirSync(outDir, { recursive: true });

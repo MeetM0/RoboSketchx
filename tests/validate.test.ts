@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, test } from 'node:test';
 
-import { countByInvariant, validateGcode } from '../lib/gcode/validate';
+import { countByInvariant, validateGcode } from '../lib/plot/validate';
 import { A4_RULES } from './helpers/rules';
 
 const GOOD = `; ok

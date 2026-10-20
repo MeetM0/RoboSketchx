@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useContext, useEffect, useState, type PropsWithChildren } from 'react';
 
-import { DEFAULT_PLOTTER_SETTINGS, type PlotterSettings } from '@/lib/sketch';
+import { DEFAULT_PLOTTER_SETTINGS, type PlotterSettings } from '@/lib/plot';
 
 const STORAGE_KEY = 'robosketch.plotterSettings.v1';
 
