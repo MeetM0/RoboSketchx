@@ -4,7 +4,7 @@
  */
 import { decode, encode } from 'jpeg-js';
 
-import type { RgbaImage } from '../../lib/sketch/types';
+import type { RgbaImage } from '../../lib/geometry/types';
 
 const rng = (seed: number) => () => (seed = (seed * 16807) % 2147483647) / 2147483647;
 

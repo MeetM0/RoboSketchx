@@ -5,9 +5,9 @@ import 'react-native-reanimated';
 
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { AppearanceProvider } from '@/lib/appearance';
-import { PlotterSettingsProvider } from '@/lib/plotter-settings';
-import { RobotProvider } from '@/lib/robot/robot-context';
+import { AppearanceProvider } from '@/state/appearance';
+import { PlotterSettingsProvider } from '@/state/plotter-settings';
+import { RobotProvider } from '@/state/robot';
 
 export const unstable_settings = {
   anchor: '(tabs)',

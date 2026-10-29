@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import * as sk from '../lib/sketch';
+import * as geo from '../lib/geometry';
+import * as plot from '../lib/plot';
+import * as sk from '../lib/sources/photo';
 import { diskScene, downscale, snoopScene } from './helpers/scenes';
 
-const S = sk.DEFAULT_PLOTTER_SETTINGS;
+const S = plot.DEFAULT_PLOTTER_SETTINGS;
 const USABLE = { w: S.paperWidthMm - 2 * S.marginMm, h: S.paperHeightMm - 2 * S.marginMm };
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const bboxOf = (strokes: { x: number; y: number }[][]) => {
@@ -23,7 +25,7 @@ const bboxOf = (strokes: { x: number; y: number }[][]) => {
  * The app's photo pipeline (decoded working image in, sketch out). Before photoToSketch
  * existed, the app resized the whole frame to 512 px and traced it.
  */
-function photoSketch(image: sk.RgbaImage): sk.Sketch {
+function photoSketch(image: geo.RgbaImage): geo.Sketch {
   const run = (sk as unknown as { photoToSketch?: Function }).photoToSketch;
   if (run) return run(image, { detail: 'medium', removeBackground: true, settings: S }).sketch;
   const longest = Math.max(image.width, image.height);
@@ -36,7 +38,7 @@ function photoSketch(image: sk.RgbaImage): sk.Sketch {
 }
 
 test('P2: the drawing (stroke bbox) is fitted and centred in the printable area', () => {
-  const plan = sk.planPlot(photoSketch(snoopScene()), S);
+  const plan = plot.planPlot(photoSketch(snoopScene()), S);
   const b = bboxOf(plan.strokes);
   const w = b.maxX - b.minX;
   const h = b.maxY - b.minY;
@@ -57,7 +59,7 @@ test('P1: the subject is cropped before resizing, so it gets the full 512 px', (
   const sketch = photoSketch(snoopScene(768, 1024));
   const b = bboxOf(sketch.strokes);
   const subjectPx = Math.max(b.maxX - b.minX, b.maxY - b.minY);
-  const mmPerPx = sk.pixelToPaperTransform(sketch, S).scale;
+  const mmPerPx = plot.pixelToPaperTransform(sketch, S).scale;
   console.log(
     `  traced frame ${sketch.width}×${sketch.height} px; subject ${r2(b.maxX - b.minX)} × ${r2(b.maxY - b.minY)} px; ${r2(mmPerPx)} mm per traced px on A4`
   );
@@ -102,9 +104,9 @@ test('P6: thresholds are in mm, so resolution does not change the drawing', () =
     // mm per traced pixel when this frame is fitted to A4's printable area.
     const mmPerPx = Math.min(USABLE.w / image.width, USABLE.h / image.height);
     const sketch = (
-      sk.imageToSketch as (i: sk.RgbaImage, o: sk.SketchOptions, m?: number) => sk.Sketch
+      sk.imageToSketch as (i: geo.RgbaImage, o: geo.SketchOptions, m?: number) => geo.Sketch
     )(input, sk.DETAIL_PRESETS.medium, mmPerPx);
-    const plan = sk.planPlot({ ...sketch, fit: 'frame' }, S);
+    const plan = plot.planPlot({ ...sketch, fit: 'frame' }, S);
     return {
       px: `${image.width}×${image.height}`,
       mmPerPx,

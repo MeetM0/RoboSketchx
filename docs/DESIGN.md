@@ -105,9 +105,9 @@ Where they live:
 | `Banner` | `components/ui/banner.tsx` |
 | `ProgressBar` | `components/ui/progress-bar.tsx` |
 | `Sheet` (bottom sheet / dialog) | `components/ui/sheet.tsx` |
-| `StatusPill`, connect flow, status wording | `components/robot/` |
-| `PlotActionBar` (summary, Connect → Send → Stop, outcome, export) | `components/plot-action-bar.tsx` |
-| `SketchPreview` / `Stage` (paper fitted to its container) | `components/sketch-preview.tsx` |
+| `StatusPill`, connect flow, status wording | `features/robot/` |
+| `PlotActionBar` (summary, Connect → Send → Stop, outcome, export) | `features/plot/plot-action-bar.tsx` |
+| `SketchPreview` / `Stage` (paper fitted to its container) | `features/plot/sketch-preview.tsx` |
 
 Fields never silently revert: an out-of-range value stays in the box with the allowed range
 ("Enter a value from 0–104 mm.") and the stored setting is unchanged until it's valid.
@@ -125,5 +125,5 @@ web · keyboard reachable (web) · colour never the only signal (icons + text) �
 system dark mode and text scaling.
 
 Appearance (Robot → Appearance): **System** (default, follows the OS), **Light** or **Dark**;
-remembered across launches (`lib/appearance.tsx`). On phones the choice also switches system
+remembered across launches (`state/appearance.tsx`). On phones the choice also switches system
 UI (alerts, keyboard, status bar).

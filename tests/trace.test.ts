@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import * as sk from '../lib/sketch';
-import * as geometry from '../lib/sketch/geometry';
-import type { Polyline } from '../lib/sketch/types';
+import * as sk from '../lib/sources/photo';
+import * as geometry from '../lib/sources/photo/chains';
+import type { Polyline } from '../lib/geometry/types';
 import { diskScene } from './helpers/scenes';
 
 const line = (x0: number, y0: number, x1: number, y1: number, n = 10): Polyline =>

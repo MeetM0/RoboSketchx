@@ -1,0 +1,20 @@
+// Photo → pen strokes. Order of work: decode → find subject & crop (photo.ts, background.ts)
+// → edges (edges.ts) → pixel chains (trace.ts) → clean chains (chains.ts) → strokes (pipeline.ts).
+export {
+  applyMask,
+  backgroundPathData,
+  removeBackground,
+  type BackgroundRemoval,
+} from './background';
+export { decodeJpegBase64 } from './decode';
+export {
+  cropImage,
+  photoToSketch,
+  PHOTO_WORK_SIZE,
+  resizeImage,
+  TRACE_SIZE,
+  type CropRect,
+  type PhotoOptions,
+  type PhotoSketch,
+} from './photo';
+export * from './pipeline';

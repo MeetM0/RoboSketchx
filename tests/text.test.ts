@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { validateGcode } from '../lib/gcode/validate';
-import { DEFAULT_PLOTTER_SETTINGS, planPlot, rulesFor, sketchToGcode } from '../lib/sketch/export';
-import { FONTS, layoutText, type TextLayoutOptions } from '../lib/text/layout';
+import { validateGcode } from '../lib/plot/validate';
+import { DEFAULT_PLOTTER_SETTINGS, planPlot, rulesFor, sketchToGcode } from '../lib/plot';
+import { FONTS, layoutText, type TextLayoutOptions } from '../lib/sources/text/layout';
 
 const S = DEFAULT_PLOTTER_SETTINGS;
 const AREA = {

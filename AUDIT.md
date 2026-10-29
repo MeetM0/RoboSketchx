@@ -1,5 +1,7 @@
 # RoboSketch audit (Phase 1, no code changed)
 
+> Paths in this audit refer to the layout at the time (`lib/sketch/`, `lib/gcode/`, `lib/robot/robot-context.tsx`). They now live in `lib/sources/photo/`, `lib/plot/` and `state/robot.tsx`; see `docs/ARCHITECTURE.md`.
+
 Branch `claude/eloquent-feynman-kzzl5q` at `e468560`. Severity: **SAFETY** = machine safety,
 **PAPER** = visible on paper, **HYGIENE** = correctness/maintainability with no direct effect.
 

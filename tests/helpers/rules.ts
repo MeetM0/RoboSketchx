@@ -1,4 +1,4 @@
-import { DEFAULT_SAMPLING, type ValidationRules } from '../../lib/gcode/validate';
+import { DEFAULT_SAMPLING, type ValidationRules } from '../../lib/plot/validate';
 
 /** Rules for the A4 defaults: 10 mm margin, Z pen (up 5, down 0), park at X0 Y0. */
 export const A4_RULES: ValidationRules = {
