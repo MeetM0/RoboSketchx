@@ -17,28 +17,21 @@ Runs on iOS, Android and web (Expo SDK 54, expo-router).
 
 ## Get started
 
-Requires Node.js 20.19.4 or newer.
+New to the project? Follow **[docs/SETUP.md](docs/SETUP.md)**: tools to install, cloning,
+running on a browser or phone, and troubleshooting. The short version, with Node.js 20.19.4 or
+newer (22 LTS recommended):
 
 ```bash
-npm install
-npx expo start
+git clone https://github.com/MeetM0/RoboSketchx.git
+cd RoboSketchx
+npm run setup
+npx expo start --web
 ```
 
-Press `i` (iOS simulator), `a` (Android emulator) or `w` (web), or scan the QR code with Expo Go.
-
-### Bluetooth needs a development build
-
-Everything except Bluetooth runs in Expo Go. Sending to the robot uses native BLE
-(`react-native-ble-plx`), so build the app once with the native code included:
-
-```bash
-npx expo run:ios --device      # iPhone over USB (needs Xcode)
-npx expo run:android --device  # Android phone over USB (needs Android Studio)
-```
-
-After that, `npx expo start` serves updates to the installed development build. (Or use
-EAS: `eas build --profile development`.) On the web, Bluetooth works in Chrome and Edge via
-Web Bluetooth. The iOS simulator has no Bluetooth; use a real phone.
+`npm run setup` installs the exact locked dependencies (`npm ci`) and runs the checks.
+Bluetooth to the robot needs Chrome or Edge on the web, or a development build on a phone
+(`npx expo run:ios --device` / `npx expo run:android --device`); Expo Go runs everything
+except Bluetooth (`npx expo start --go`). Before pushing, run `npm run check`.
 
 ## How it's organised
 

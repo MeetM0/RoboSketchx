@@ -2,7 +2,12 @@
   "name": "robosketch",
   "main": "expo-router/entry",
   "version": "1.0.0",
+  "engines": {
+    "node": ">=20.19.4"
+  },
   "scripts": {
+    "setup": "node ./scripts/setup.js",
+    "check": "tsc --noEmit && npm run lint && npm test",
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo start --android",
