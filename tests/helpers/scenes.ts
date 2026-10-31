@@ -76,12 +76,19 @@ export function lineArt(width: number, height: number, ink: (x: number, y: numbe
 /**
  * An inked cartoon: a red disc with a darker red shading band, a 9 px black outline of
  * radius 150 around (256, 256), and a shallow black chord joining the outline at both ends
- * (rising to the right, so its pixels form a staircase), and a solid black dot (an eye) of
- * radius 10. JPEG round-tripped like a picked image.
+ * (rising to the right, so its pixels form a staircase), and two solid black dots (eyes) of
+ * radius 10 and 5. JPEG round-tripped like a picked image.
  */
-export const CARTOON = { cx: 256, cy: 256, r: 150, outline: 9, dot: { x: 196, y: 196, r: 10 } };
+export const CARTOON = {
+  cx: 256,
+  cy: 256,
+  r: 150,
+  outline: 9,
+  dot: { x: 196, y: 196, r: 10 },
+  smallDot: { x: 226, y: 196, r: 5 },
+};
 export function inkedCartoon(): RgbaImage {
-  const { cx, cy, r, outline, dot } = CARTOON;
+  const { cx, cy, r, outline, dot, smallDot } = CARTOON;
   const chord = { x0: cx - 160, y0: cy + 27, x1: cx + 160, y1: cy - 27 };
   const toChord = (x: number, y: number) => {
     const dx = chord.x1 - chord.x0;
@@ -97,6 +104,7 @@ export function inkedCartoon(): RgbaImage {
       const d = Math.hypot(x - cx, y - cy);
       if (Math.abs(d - r) <= outline / 2 || (d < r && toChord(x, y) <= 3)) return [20, 20, 20];
       if (Math.hypot(x - dot.x, y - dot.y) <= dot.r) return [20, 20, 20];
+      if (Math.hypot(x - smallDot.x, y - smallDot.y) <= smallDot.r) return [20, 20, 20];
       if (d < r) return x - cx > 60 ? [190, 40, 48] : [225, 60, 70];
       return [255, 255, 255];
     })

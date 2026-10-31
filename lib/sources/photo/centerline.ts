@@ -258,11 +258,20 @@ export function penPaths(
     }
   }
 
-  // Ink with nothing left to draw (a blob the thinning erased) is a solid shape too.
+  // A separate ink shape that is short for its own thickness is a dot, however thin (a small
+  // eye): its centre line would be a dash too short to draw, or erased by the thinning.
   const { labels, sizes } = labelRegions(ink, width, height, 1);
-  const drawn = new Uint8Array(sizes.length);
-  for (let i = 0; i < ink.length; i++) if (ink[i] && (paths[i] || solid[i])) drawn[labels[i]] = 1;
-  for (let i = 0; i < ink.length; i++) if (ink[i] && !drawn[labels[i]]) solid[i] = 1;
+  const centreLength = new Float32Array(sizes.length);
+  const peakHalf = new Float32Array(sizes.length);
+  for (let i = 0; i < ink.length; i++) {
+    if (!ink[i]) continue;
+    centreLength[labels[i]] += skeleton[i];
+    peakHalf[labels[i]] = Math.max(peakHalf[labels[i]], dist[i]);
+  }
+  for (let i = 0; i < ink.length; i++) {
+    const l = labels[i];
+    if (ink[i] && centreLength[l] <= SOLID_MAX_LENGTH * peakHalf[l]) solid[i] = 1;
+  }
 
   // Inside solid shapes: drop the centre lines and draw the edge against the paper instead.
   for (let y = 0; y < height; y++) {
