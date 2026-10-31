@@ -1,18 +1,22 @@
-import type { DetailLevel, RgbaImage, Sketch } from "../../geometry/types";
-import type { PlotterSettings } from "../../plot/settings";
-import {
-  applyMask,
-  removeBackground,
-  type BackgroundRemoval,
-} from "./background";
-import { checkLineArt, inkMask, measureLineArt } from "./centerline";
-import { labelRegions } from "./morphology";
-import { DETAIL_PRESETS, imageToSketch, lineArtToSketch } from "./pipeline";
+import type { DetailLevel, RgbaImage, Sketch } from '../../geometry/types';
+import type { PlotterSettings } from '../../plot/settings';
+import { applyMask, removeBackground, type BackgroundRemoval } from './background';
+import { checkLineArt, inkMask, measureLineArt } from './centerline';
+import { labelRegions } from './morphology';
+import { DETAIL_PRESETS, imageToSketch, lineArtToSketch } from './pipeline';
 
-/** Longest side of the photo the app decodes (crop source). */
-export const PHOTO_WORK_SIZE = 1024;
-/** Longest side of the image that is actually traced. */
+/**
+ * Longest side of the photo the app decodes (crop source). Large, so a small drawing in a big
+ * picture (a screenshot, a page photo) still has its own pixels after cropping.
+ */
+export const PHOTO_WORK_SIZE = 2048;
+/** Longest side of the image that is traced as a photo, and of the detection preview. */
 export const TRACE_SIZE = 512;
+/**
+ * Longest side of a line drawing when traced. Higher than photos: thin lines must stay a few
+ * pixels wide to survive thinning, and centre-line tracing has no blur to pay for.
+ */
+export const LINE_TRACE_SIZE = 1024;
 /** Border kept around the subject when cropping, as a fraction of the subject's longest side. */
 const CROP_PADDING = 0.06;
 
@@ -27,14 +31,14 @@ export type PhotoSketch = {
   /** Background removal on `traced` (null when removal was off). */
   removal: BackgroundRemoval | null;
   /** How the strokes were traced: centre of ink lines, or edges of shapes. */
-  trace: "lines" | "edges";
+  trace: 'lines' | 'edges';
 };
 
 /**
  * `lines` traces the middle of dark lines (cartoons, inked drawings); `edges` traces the
  * outlines of shapes (photos); `auto` picks `lines` when the image looks like a line drawing.
  */
-export type TraceMode = "auto" | "lines" | "edges";
+export type TraceMode = 'auto' | 'lines' | 'edges';
 
 export type PhotoOptions = {
   detail: DetailLevel;
@@ -50,53 +54,35 @@ export type PhotoOptions = {
  * is cropped to it (plus padding) *before* being resized for tracing, so the subject gets the
  * full trace resolution instead of the share of the frame it happened to occupy.
  */
-export function photoToSketch(
-  image: RgbaImage,
-  options: PhotoOptions,
-): PhotoSketch {
-  const mode = options.trace ?? "auto";
+export function photoToSketch(image: RgbaImage, options: PhotoOptions): PhotoSketch {
+  const mode = options.trace ?? 'auto';
   const preset = DETAIL_PRESETS[options.detail];
   const preview = resizeImage(image, TRACE_SIZE);
   const k = image.width / preview.width;
 
   // Line drawings: the paper is the background and every stroke matters, so crop to all of
   // the ink rather than to a "subject" (which can be one enclosed patch of paper).
-  const previewArt = mode === "edges" ? null : checkLineArt(preview);
-  if (mode === "lines" || (mode === "auto" && previewArt?.isLineArt)) {
-    const kind = previewArt?.isLineArt ? previewArt.ink : "dark";
-    const ink = previewArt?.isLineArt
-      ? previewArt.inkMask
-      : inkMask(preview, kind);
+  const previewArt = mode === 'edges' ? null : checkLineArt(preview);
+  if (mode === 'lines' || (mode === 'auto' && previewArt?.isLineArt)) {
+    const kind = previewArt?.isLineArt ? previewArt.ink : 'dark';
+    const ink = previewArt?.isLineArt ? previewArt.inkMask : inkMask(preview, kind);
     const { bounds, marks } = drawingBounds(ink, preview.width, preview.height);
     const crop = padCrop(bounds, k, image);
-    const traced = resizeImage(
-      cropImage(eraseMarks(image, marks, k), crop),
-      TRACE_SIZE,
-    );
+    const traced = resizeImage(cropImage(eraseMarks(image, marks, k), crop), LINE_TRACE_SIZE);
     const art = measureLineArt(traced, kind, true);
     return {
-      sketch: lineArtToSketch(
-        traced,
-        preset,
-        mmPerPxFor(traced, options.settings),
-        art.paths,
-      ),
+      sketch: lineArtToSketch(traced, preset, mmPerPxFor(traced, options.settings), art.paths),
       traced,
       crop,
       removal: null,
-      trace: "lines",
+      trace: 'lines',
     };
   }
 
   let crop: CropRect = { x: 0, y: 0, width: image.width, height: image.height };
   if (options.removeBackground) {
     const found = removeBackground(preview);
-    if (found.ok)
-      crop = padCrop(
-        maskBounds(found.mask, preview.width, preview.height),
-        k,
-        image,
-      );
+    if (found.ok) crop = padCrop(maskBounds(found.mask, preview.width, preview.height), k, image);
   }
   const traced = resizeImage(cropImage(image, crop), TRACE_SIZE);
   let input = traced;
@@ -110,7 +96,7 @@ export function photoToSketch(
     traced,
     crop,
     removal,
-    trace: "edges",
+    trace: 'edges',
   };
 }
 
@@ -121,7 +107,7 @@ export function photoToSketch(
 function mmPerPxFor(traced: RgbaImage, s: PlotterSettings) {
   return Math.min(
     (s.paperWidthMm - 2 * s.marginMm) / traced.width,
-    (s.paperHeightMm - 2 * s.marginMm) / traced.height,
+    (s.paperHeightMm - 2 * s.marginMm) / traced.height
   );
 }
 
@@ -148,7 +134,7 @@ const EDGE_MARK_MARGIN = 0.02;
 function drawingBounds(
   ink: Uint8Array,
   width: number,
-  height: number,
+  height: number
 ): { bounds: CropRect; marks: CropRect[] } {
   const { labels, sizes, touchesBorder } = labelRegions(ink, width, height, 1);
   // Watermarks usually sit a few pixels in from the edge, not on it.
@@ -157,10 +143,7 @@ function drawingBounds(
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const i = y * width + x;
-      if (
-        ink[i] &&
-        (x <= m || y <= m || x >= width - 1 - m || y >= height - 1 - m)
-      )
+      if (ink[i] && (x <= m || y <= m || x >= width - 1 - m || y >= height - 1 - m))
         nearEdge[labels[i]] = 1;
     }
   }
@@ -180,9 +163,7 @@ function drawingBounds(
     if (!mask) markMasks.set(l, (mask = new Uint8Array(ink.length)));
     mask[i] = 1;
   }
-  const marks = [...markMasks.values()].map((m) =>
-    maskBounds(m, width, height),
-  );
+  const marks = [...markMasks.values()].map((m) => maskBounds(m, width, height));
   return { bounds: maskBounds(keep, width, height), marks };
 }
 
@@ -221,21 +202,13 @@ function maskBounds(mask: Uint8Array, width: number, height: number): CropRect {
 }
 
 export function cropImage(image: RgbaImage, rect: CropRect): RgbaImage {
-  if (
-    rect.x === 0 &&
-    rect.y === 0 &&
-    rect.width === image.width &&
-    rect.height === image.height
-  ) {
+  if (rect.x === 0 && rect.y === 0 && rect.width === image.width && rect.height === image.height) {
     return image;
   }
   const data = new Uint8Array(rect.width * rect.height * 4);
   for (let y = 0; y < rect.height; y++) {
     const from = ((rect.y + y) * image.width + rect.x) * 4;
-    data.set(
-      image.data.subarray(from, from + rect.width * 4),
-      y * rect.width * 4,
-    );
+    data.set(image.data.subarray(from, from + rect.width * 4), y * rect.width * 4);
   }
   return { width: rect.width, height: rect.height, data };
 }
@@ -273,10 +246,7 @@ export function resizeImage(image: RgbaImage, maxSide: number): RgbaImage {
         for (let c = 0; c < 4; c++) data[o + c] = sums[c] / n;
       } else {
         const fx = Math.min(image.width - 1, Math.max(0, (x + 0.5) * sx - 0.5));
-        const fy = Math.min(
-          image.height - 1,
-          Math.max(0, (y + 0.5) * sy - 0.5),
-        );
+        const fy = Math.min(image.height - 1, Math.max(0, (y + 0.5) * sy - 0.5));
         const x0 = Math.floor(fx);
         const y0 = Math.floor(fy);
         const x1 = Math.min(image.width - 1, x0 + 1);
@@ -284,8 +254,7 @@ export function resizeImage(image: RgbaImage, maxSide: number): RgbaImage {
         const tx = fx - x0;
         const ty = fy - y0;
         for (let c = 0; c < 4; c++) {
-          const p = (xx: number, yy: number) =>
-            image.data[(yy * image.width + xx) * 4 + c];
+          const p = (xx: number, yy: number) => image.data[(yy * image.width + xx) * 4 + c];
           data[o + c] =
             (p(x0, y0) * (1 - tx) + p(x1, y0) * tx) * (1 - ty) +
             (p(x0, y1) * (1 - tx) + p(x1, y1) * tx) * ty;

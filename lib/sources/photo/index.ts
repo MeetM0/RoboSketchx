@@ -12,6 +12,7 @@ export {
   photoToSketch,
   PHOTO_WORK_SIZE,
   resizeImage,
+  LINE_TRACE_SIZE,
   TRACE_SIZE,
   type CropRect,
   type PhotoOptions,
