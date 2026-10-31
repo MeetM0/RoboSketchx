@@ -190,3 +190,23 @@ export function filledCartoon(): RgbaImage {
     })
   );
 }
+
+/**
+ * A textured outdoor-style photo: mottled foliage tones everywhere (no flat areas) and a few
+ * thin dark branches, the kind of thin dark detail nearly every photo has.
+ */
+export function texturedPhoto(width = 512, height = 384): RgbaImage {
+  const noise = rng(21);
+  const branch = (x: number, y: number) =>
+    [0.3, 0.55, 0.8].some(
+      (k, i) => Math.abs(y - (k * height + 40 * Math.sin(x / (60 + 20 * i)))) < 2
+    );
+  return jpegRoundTrip(
+    canvas(width, height, (x, y) => {
+      const n = (noise() - 0.5) * 50;
+      const base = 120 + 50 * Math.sin(x / 9) * Math.cos(y / 7) + 30 * Math.sin((x + y) / 31);
+      if (branch(x, y)) return [30 + n / 5, 25 + n / 5, 20 + n / 5];
+      return [base * 0.7 + n, base + n, base * 0.5 + n];
+    })
+  );
+}

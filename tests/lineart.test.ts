@@ -16,6 +16,7 @@ import {
   lineArt,
   markerDoodle,
   snoopScene,
+  texturedPhoto,
 } from './helpers/scenes';
 
 const S = plot.DEFAULT_PLOTTER_SETTINGS;
@@ -236,8 +237,9 @@ test('P4: a line running into a solid shape is joined to its outline (no gap)', 
   assert.ok(reach <= 1.5, 'joined to the outline');
 });
 
-test('P4: in a cartoon with large black fills, the fills are drawn by their outline', () => {
-  const result = run(filledCartoon(), 'lines');
+test('P4: a cartoon with large black fills is a line drawing, its fills drawn by their outline', () => {
+  const result = run(filledCartoon());
+  assert.equal(result.trace, 'lines', 'flat artwork, not a photo');
   const { block, navy, line } = FILLED;
   const points = samples(result);
   const nearEdge = (b: typeof block) =>
@@ -261,4 +263,48 @@ test('P4: in a cartoon with large black fills, the fills are drawn by their outl
     onLine > 0.8 * (line.x1 - line.x0) && onLine < 1.2 * (line.x1 - line.x0),
     'the thin line drawn once'
   );
+});
+
+test('P5: thinning keeps a diagonal line two pixels wide (Zhang–Suen alone erases it)', () => {
+  const width = 64;
+  const height = 64;
+  const mask = new Uint8Array(width * height);
+  for (let k = 10; k < 50; k++) {
+    mask[k * width + k] = 1;
+    mask[k * width + k + 1] = 1;
+  }
+  const skeleton = sk.thin(mask, width, height);
+  const kept = skeleton.reduce((sum, v) => sum + v, 0);
+  console.log(`  ${kept} of 40 diagonal pixels kept`);
+  assert.ok(kept >= 36, 'the diagonal survives as a line');
+});
+
+test('P4: an asterisk drawn with a thick pen is drawn as lines through its centre', () => {
+  const c = { x: 256, y: 256, arm: 120, half: 4 };
+  const arms = [0, 60, 120].map((deg) => (deg * Math.PI) / 180);
+  const result = run(
+    lineArt(512, 512, (x, y) =>
+      arms.some((a) => {
+        const along = (x - c.x) * Math.cos(a) + (y - c.y) * Math.sin(a);
+        const across = -(x - c.x) * Math.sin(a) + (y - c.y) * Math.cos(a);
+        return Math.abs(along) <= c.arm && Math.abs(across) <= c.half;
+      })
+    ),
+    'lines'
+  );
+  const points = samples(result);
+  const nearCentre = points.filter((p) => Math.hypot(p.x - c.x, p.y - c.y) < 6).length;
+  const onArms = points.filter((p) =>
+    arms.some((a) => Math.abs(-(p.x - c.x) * Math.sin(a) + (p.y - c.y) * Math.cos(a)) < 4)
+  ).length;
+  console.log(
+    `  ${nearCentre} samples at the centre, ${onArms} of ${points.length} along the arms`
+  );
+  assert.ok(nearCentre > 0, 'the lines cross the centre');
+  assert.ok(onArms > 0.9 * points.length, 'drawn along the arms, not around them');
+});
+
+test('P4: a textured photo with thin dark details is traced as a photo, not a line drawing', () => {
+  const result = run(texturedPhoto());
+  assert.equal(result.trace, 'edges');
 });

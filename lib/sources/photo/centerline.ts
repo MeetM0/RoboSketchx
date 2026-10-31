@@ -225,8 +225,8 @@ function localPaper(luma: Uint8Array, width: number, height: number, radius: num
 }
 
 /**
- * Zhang–Suen thinning: peels pixels off the ink until every line is one pixel wide, keeping
- * its middle and its connections.
+ * Zhang–Suen thinning (with Lü & Wang's fix for diagonals): peels pixels off the ink until
+ * every line is one pixel wide, keeping its middle and its connections.
  */
 export function thin(mask: Uint8Array, width: number, height: number): Uint8Array {
   const img = mask.slice();
@@ -250,7 +250,9 @@ export function thin(mask: Uint8Array, width: number, height: number): Uint8Arra
           const p8 = img[i - 1];
           const p9 = img[i - width - 1];
           const b = p2 + p3 + p4 + p5 + p6 + p7 + p8 + p9;
-          if (b < 2 || b > 6) continue;
+          // b >= 3, not Zhang–Suen's 2 (Lü & Wang): with 2, a diagonal line that has thinned to
+          // two pixels wide is removed entirely, both halves at once.
+          if (b < 3 || b > 6) continue;
           const a =
             Number(!p2 && p3) +
             Number(!p3 && p4) +
@@ -317,13 +319,59 @@ export function measureLineArt(image: RgbaImage, kind: InkKind, force = false): 
   }
   const inkFraction = inkPixels / ink.length;
   const lineWidthPx = skeletonPixels ? inkPixels / skeletonPixels : 0;
+  // Enough drawing: a long centre line, or (dark ink) enough ink, for drawings of solid shapes.
+  const enoughLines =
+    skeletonPixels >= (width + height) / 2 ||
+    (kind === 'dark' && inkFraction >= DARK_MIN_SHAPES_INK_FRACTION);
+  // Dark ink: a drawing is flat colour (cartoon, clip art, scan) with dark lines and fills;
+  // a photo is textured everywhere, and nearly every photo has some thin dark ink. Black fills
+  // are fine (they are outlined), so line width isn't limited here.
+  // Contrast ink (pencil, marker, often photographed): thin lines on mostly bare paper.
   const isLineArt =
-    skeletonPixels >= (width + height) / 2 &&
-    inkFraction <= (kind === 'dark' ? 0.3 : CONTRAST_MAX_INK_FRACTION) &&
-    lineWidthPx <= Math.max(3, MAX_LINE_WIDTH_FRACTION * Math.max(width, height)) &&
-    (kind === 'dark' || lineWidthPx <= CONTRAST_MAX_WIDTH_SHARE * paperRadius(width, height));
+    kind === 'dark'
+      ? enoughLines && inkFraction <= DARK_MAX_INK_FRACTION && flatness(image) >= MIN_FLATNESS
+      : enoughLines &&
+        inkFraction <= CONTRAST_MAX_INK_FRACTION &&
+        lineWidthPx <= Math.max(3, MAX_LINE_WIDTH_FRACTION * Math.max(width, height)) &&
+        lineWidthPx <= CONTRAST_MAX_WIDTH_SHARE * paperRadius(width, height);
   const paths = isLineArt || force ? penPaths(ink, skeleton, width, height) : skeleton;
   return { isLineArt, ink: kind, inkFraction, lineWidthPx, inkMask: ink, skeleton, paths };
+}
+
+/** Share of pixels in flat areas above which an image is drawn artwork, not a photo. */
+const MIN_FLATNESS = 0.65;
+/** A flat picture this much dark ink is a drawing even without long lines (paw prints). */
+const DARK_MIN_SHAPES_INK_FRACTION = 0.05;
+/** Dark ink may cover at most this share of a drawing (black fills included). */
+const DARK_MAX_INK_FRACTION = 0.6;
+/** Neighbourhood range (grey levels) up to which a pixel counts as flat. */
+const FLAT_RANGE = 10;
+
+/**
+ * Share of pixels whose 3x3 neighbourhood varies by at most FLAT_RANGE grey levels. Drawn
+ * artwork is mostly flat colour (0.8–0.95, JPEG included); photos are textured (0.05–0.6).
+ */
+function flatness({ data, width, height }: RgbaImage): number {
+  const luma = new Uint8Array(width * height);
+  for (let i = 0; i < luma.length; i++) {
+    luma[i] = 0.299 * data[i * 4] + 0.587 * data[i * 4 + 1] + 0.114 * data[i * 4 + 2];
+  }
+  let flat = 0;
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      let min = 255;
+      let max = 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const v = luma[(y + dy) * width + x + dx];
+          if (v < min) min = v;
+          if (v > max) max = v;
+        }
+      }
+      if (max - min <= FLAT_RANGE) flat++;
+    }
+  }
+  return flat / Math.max(1, (width - 2) * (height - 2));
 }
 
 /** Thickness factor over the typical line's half-width at which ink counts as a solid shape. */
@@ -332,8 +380,17 @@ const SOLID_THICKNESS = 1.8;
 const SOLID_MAX_LENGTH = 6;
 /** Ink at least this many typical line half-widths thick is drawn by its outline, whatever its length. */
 const BAND_THICKNESS = 3;
+/**
+ * Ink thicker than this share of the longest side (half-width) is a fill whatever the typical
+ * line: in a drawing that is mostly fills (a pool ball, a chess piece) the "typical line" is a fill.
+ */
+const BAND_MAX_SHARE = 0.03;
 /** ...and at least this thick (pixels), so drawings with hairlines don't outline ordinary lines. */
 const BAND_MIN_HALF_WIDTH = 4;
+/** A thick short spot with this many lines leaving it is a junction, not a solid shape. */
+const JUNCTION_BRANCHES = 3;
+/** A dot fills at least this share of the disc around its centre (an oval eye ~0.55, a dash less). */
+const DOT_MIN_FILL = 0.5;
 /** How far (pixels) solid shapes are grown over adjoining ink to reach their own edge. */
 const SOLID_GROW_PX = 2;
 
@@ -450,6 +507,41 @@ export function penPaths(
     return out;
   };
 
+  // The ink within each core pixel's own radius (+1) of it: a breadth-first growth from the
+  // core, each pixel keeping the core pixel it came from. Marks the pixels with `id`.
+  const mark = new Int32Array(ink.length);
+  const owner = new Int32Array(ink.length);
+  let shapeId = 0;
+  const discUnion = (core: number[], id: number) => {
+    const out: number[] = [];
+    for (const i of core) {
+      if (mark[i] === id) continue;
+      mark[i] = id;
+      owner[i] = i;
+      out.push(i);
+    }
+    for (let k = 0; k < out.length; k++) {
+      const i = out[k];
+      const o = owner[i];
+      const ox = o % width;
+      const oy = (o - ox) / width;
+      const r = dist[o] + 1;
+      const x = i % width;
+      for (const d of [-width - 1, -width, -width + 1, -1, 1, width - 1, width, width + 1]) {
+        const n = i + d;
+        if (n < 0 || n >= ink.length || Math.abs((n % width) - x) > 1) continue;
+        if (!ink[n] || mark[n] === id) continue;
+        const nx = n % width;
+        const ny = (n - nx) / width;
+        if ((nx - ox) ** 2 + (ny - oy) ** 2 > r * r) continue;
+        mark[n] = id;
+        owner[n] = o;
+        out.push(n);
+      }
+    }
+    return out;
+  };
+
   for (let start = 0; start < ink.length; start++) {
     if (seen[start] || dist[start] < thick) continue;
     // The thick seed, then everything joined to it that stays at least 60 % as thick as its
@@ -460,17 +552,13 @@ export function penPaths(
     const core = [...seed, ...component(seed[0], (n) => dist[n] >= 0.6 * peak)];
     // Area of a strip 0.8 x peak wide, i.e. its length in widths: see SOLID_MAX_LENGTH.
     if (core.length > SOLID_MAX_LENGTH * 0.8 * peak * peak) continue;
-    for (const i of core) {
-      const cx = i % width;
-      const cy = (i - cx) / width;
-      const r = Math.ceil(dist[i]) + 1;
-      for (let y = Math.max(0, cy - r); y <= Math.min(height - 1, cy + r); y++) {
-        for (let x = Math.max(0, cx - r); x <= Math.min(width - 1, cx + r); x++) {
-          const j = y * width + x;
-          if (ink[j] && (x - cx) ** 2 + (y - cy) ** 2 <= r * r) solid[j] = 1;
-        }
-      }
-    }
+    const shape = discUnion(core, ++shapeId);
+    // Where three or more lines meet (an asterisk, a star), the crossing is thick and short
+    // too, but it is a junction: keep the lines running through it.
+    const id = shapeId;
+    const inShape = (i: number) => mark[i] === id;
+    if (branchesLeaving(shape, inShape, skeleton, width, height) >= JUNCTION_BRANCHES) continue;
+    for (const j of shape) solid[j] = 1;
   }
 
   // Parts far thicker than the drawing's lines (a heavy brush band around an eye, a filled
@@ -478,27 +566,63 @@ export function penPaths(
   // lose the shape. Bold lines stay well under this.
   // Morphological opening: every ink pixel inside a disc of radius `band` that fits in the ink.
   // It covers the thick part right up to its edge; narrow tips and lines stay out.
-  const band = Math.max(BAND_MIN_HALF_WIDTH, BAND_THICKNESS * lineHalf);
+  const band = Math.max(
+    BAND_MIN_HALF_WIDTH,
+    Math.min(BAND_THICKNESS * lineHalf, BAND_MAX_SHARE * Math.max(width, height))
+  );
   const notCore = new Uint8Array(ink.length);
   for (let i = 0; i < ink.length; i++) notCore[i] = dist[i] >= band ? 0 : 1;
   const toCore = inkDistance(notCore, width, height, false);
+  const opened = new Uint8Array(ink.length);
   for (let i = 0; i < ink.length; i++) {
-    if (ink[i] && toCore[i] <= band + 0.5) solid[i] = 1;
+    if (ink[i] && toCore[i] <= band + 0.5) opened[i] = 1;
+  }
+  // A small thick spot where several lines cross (the middle of an asterisk drawn with a
+  // thick pen) is a junction, not a fill.
+  const parts = labelRegions(opened, width, height, 1);
+  const members: number[][] = parts.sizes.map(() => []);
+  for (let i = 0; i < ink.length; i++) if (opened[i]) members[parts.labels[i]].push(i);
+  for (const part of members) {
+    if (!part.length) continue;
+    const small = part.length <= Math.PI * (2 * band) ** 2;
+    const label = parts.labels[part[0]];
+    const inPart = (i: number) => opened[i] === 1 && parts.labels[i] === label;
+    if (small && branchesLeaving(part, inPart, skeleton, width, height) >= JUNCTION_BRANCHES) {
+      continue;
+    }
+    for (const i of part) solid[i] = 1;
   }
 
   // A separate ink shape that is short for its own thickness is a dot, however thin (a small
   // eye): its centre line would be a dash too short to draw, or erased by the thinning.
+  // Only round-ish shapes, though: a short dash or an asterisk (a line cut by a colour, a
+  // snowflake) reads better as its centre line, which thinning keeps for those shapes.
   const { labels, sizes } = labelRegions(ink, width, height, 1);
   const centreLength = new Float32Array(sizes.length);
   const peakHalf = new Float32Array(sizes.length);
+  const sumX = new Float64Array(sizes.length);
+  const sumY = new Float64Array(sizes.length);
   for (let i = 0; i < ink.length; i++) {
     if (!ink[i]) continue;
-    centreLength[labels[i]] += skeleton[i];
-    peakHalf[labels[i]] = Math.max(peakHalf[labels[i]], dist[i]);
-  }
-  for (let i = 0; i < ink.length; i++) {
     const l = labels[i];
-    if (ink[i] && centreLength[l] <= SOLID_MAX_LENGTH * peakHalf[l]) solid[i] = 1;
+    centreLength[l] += skeleton[i];
+    peakHalf[l] = Math.max(peakHalf[l], dist[i]);
+    sumX[l] += i % width;
+    sumY[l] += Math.floor(i / width);
+  }
+  const radius = new Float32Array(sizes.length);
+  for (let i = 0; i < ink.length; i++) {
+    if (!ink[i]) continue;
+    const l = labels[i];
+    const dx = (i % width) - sumX[l] / sizes[l];
+    const dy = Math.floor(i / width) - sumY[l] / sizes[l];
+    radius[l] = Math.max(radius[l], Math.hypot(dx, dy));
+  }
+  const isDot = (l: number) =>
+    centreLength[l] <= SOLID_MAX_LENGTH * peakHalf[l] &&
+    (centreLength[l] < 2 || sizes[l] >= DOT_MIN_FILL * Math.PI * (radius[l] + 0.5) ** 2);
+  for (let i = 0; i < ink.length; i++) {
+    if (ink[i] && isDot(labels[i])) solid[i] = 1;
   }
 
   // The discs can fall a pixel short of the ink's edge where it steps; grow the shapes over
@@ -571,6 +695,52 @@ export function penPaths(
     }
   }
   return paths;
+}
+
+/**
+ * How many centre lines leave a shape: skeleton pixels just outside it, grouped into
+ * 8-connected runs.
+ */
+function branchesLeaving(
+  shape: number[],
+  inShape: (i: number) => boolean,
+  skeleton: Uint8Array,
+  width: number,
+  height: number
+): number {
+  const exits = new Set<number>();
+  for (const i of shape) {
+    const x = i % width;
+    const y = (i - x) / width;
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+        const n = ny * width + nx;
+        if (skeleton[n] && !inShape(n)) exits.add(n);
+      }
+    }
+  }
+  let runs = 0;
+  const seen = new Set<number>();
+  for (const start of exits) {
+    if (seen.has(start)) continue;
+    runs++;
+    const stack = [start];
+    seen.add(start);
+    while (stack.length) {
+      const i = stack.pop()!;
+      const x = i % width;
+      for (const d of [-width - 1, -width, -width + 1, -1, 1, width - 1, width, width + 1]) {
+        const n = i + d;
+        if (Math.abs((n % width) - x) > 1 || !exits.has(n) || seen.has(n)) continue;
+        seen.add(n);
+        stack.push(n);
+      }
+    }
+  }
+  return runs;
 }
 
 /** How far (pixels) a chain end may reach to touch the line or outline it stops short of. */
