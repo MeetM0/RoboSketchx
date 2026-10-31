@@ -8,6 +8,8 @@ import * as chains from '../lib/sources/photo/chains';
 import { traceEdges } from '../lib/sources/photo/trace';
 import {
   CARTOON,
+  COLOURED,
+  colouredLines,
   diskScene,
   DOODLE,
   FILLED,
@@ -307,4 +309,28 @@ test('P4: an asterisk drawn with a thick pen is drawn as lines through its centr
 test('P4: a textured photo with thin dark details is traced as a photo, not a line drawing', () => {
   const result = run(texturedPhoto());
   assert.equal(result.trace, 'edges');
+});
+
+test('P4: lines drawn in a colour (brown window bars, a blue halo) are traced too', () => {
+  const result = run(colouredLines());
+  const { cx, cy, frame, halo } = COLOURED;
+  const points = samples(result);
+  const onBars = points.filter(
+    (p) =>
+      p.x > frame.x0 + 20 &&
+      p.x < frame.x1 - 20 &&
+      p.y > frame.y0 + 20 &&
+      p.y < frame.y1 - 20 &&
+      (Math.abs(p.x - cx) < 3 || Math.abs(p.y - cy) < 3)
+  ).length;
+  const onHalo = points.filter(
+    (p) => Math.abs(Math.hypot(p.x - cx, p.y - halo.cy) - halo.r) < 3
+  ).length;
+  const barsLength = 2 * (frame.x1 - frame.x0 - 40);
+  console.log(
+    `  bars ${onBars} of ~${barsLength} samples, halo ${onHalo}; trace = ${result.trace}`
+  );
+  assert.equal(result.trace, 'lines');
+  assert.ok(onBars > 0.8 * barsLength, 'the brown cross is drawn along its middle');
+  assert.ok(onHalo > 0.8 * 2 * Math.PI * halo.r, 'the blue halo is drawn');
 });

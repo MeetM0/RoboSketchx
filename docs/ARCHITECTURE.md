@@ -127,7 +127,10 @@ orders the strokes.
      than the paper (black and dark-coloured pens); if that finds no drawing, pixels clearly
      darker than the paper *around them* (light coloured markers, pencil, a photo of paper
      with uneven light), as long as the lines stay thin. Coloured fills and their shading are
-     not ink, dark ones (navy, maroon) included. Solid shapes (eye dots, a nose, a filled
+     not ink, dark ones (navy, maroon) included. Once a picture is known to be a drawing,
+     lines drawn in other colours (a brown window bar, a blue halo, white ribs on blue) are
+     added: areas of one flat colour, even in width, about as thin as the black lines, and
+     not squeezed between black lines or other such strips. Solid shapes (eye dots, a nose, a filled
      ear: thick everywhere, short and round) and parts at least 3× as thick as the drawing's
      typical line or 3 % of the picture (a heavy band around an eye, a black cowl, a pool
      ball) are drawn by their outline instead, with lines that run into them joined to that

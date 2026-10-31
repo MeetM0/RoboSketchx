@@ -16,6 +16,25 @@ const MAX_LINE_WIDTH_FRACTION = 0.04;
 /** Dark pixels this colourful (max − min channels, and that share of the brightest) are fills. */
 const DARK_FILL_CHROMA = 40;
 const DARK_FILL_SATURATION = 0.5;
+/** RGB distance within which pixels belong to the same flat-colour region. */
+const COLOUR_REGION_TOLERANCE = 48;
+/** A coloured line's half-width: at least this many pixels and this share of the black lines'... */
+const COLOURED_LINE_MIN_HALF_PX = 2.5;
+const COLOURED_LINE_MIN_SHARE = 0.35;
+/** ...and at most this share (+1 px). */
+const COLOURED_LINE_MAX_SHARE = 2.4;
+/** A coloured line is at least this many of its widths long. */
+const COLOURED_LINE_MIN_LENGTH = 4;
+/** At most this share of a coloured line's edge touches black ink (else a squeezed fill). */
+const COLOURED_LINE_MAX_INK_BORDER = 0.25;
+/** A coloured line's brightness varies by at most this standard deviation (grey levels). */
+const COLOURED_LINE_MAX_SPREAD = 10;
+/** A coloured line's typical thickness along its middle is at least this share of its thickest. */
+const COLOURED_LINE_MIN_EVENNESS = 0.55;
+/** A coloured line with more of its edge than this next to other coloured lines is a fill strip. */
+const COLOURED_LINE_MAX_SHARED_EDGE = 0.4;
+/** Edge pixels within this distance (pixels) of black ink count as touching it. */
+const COLOURED_LINE_INK_REACH = 3;
 /** Radius (pixels) of the blur the fill colour is judged on. */
 const FILL_COLOUR_RADIUS = 2;
 /** max − min channel difference above which a colour counts as saturated. */
@@ -126,6 +145,215 @@ export function inkMask(image: RgbaImage, kind: InkKind = 'dark'): Uint8Array {
   for (let x = 0; x < width; x++) mask[x] = mask[(height - 1) * width + x] = 0;
   for (let y = 0; y < height; y++) mask[y * width] = mask[y * width + width - 1] = 0;
   return mask;
+}
+
+/**
+ * Lines drawn in a colour other than black (a brown window bar, a blue halo, a white rib on
+ * blue, a grey net): areas of one flat colour that are about as thin as the drawing's black
+ * lines and long, added to the ink. Not added: anti-aliasing slivers along fill edges (far
+ * thinner), fills (thicker), and strips of fill squeezed between two black lines (bordered
+ * mostly by black ink).
+ */
+function addColouredLines(
+  mask: Uint8Array,
+  data: Uint8Array,
+  width: number,
+  height: number
+): boolean {
+  const n = width * height;
+  const blackHalf = ridgeHalfWidth(mask, width, height);
+  if (!blackHalf) return false;
+  // Flat-colour regions: grown from a seed while within COLOUR_REGION_TOLERANCE of its colour.
+  const region = new Int32Array(n).fill(-1);
+  const sizes: number[] = [];
+  const stack: number[] = [];
+  for (let seed = 0; seed < n; seed++) {
+    if (region[seed] >= 0 || mask[seed]) continue;
+    const id = sizes.length;
+    const r0 = data[seed * 4];
+    const g0 = data[seed * 4 + 1];
+    const b0 = data[seed * 4 + 2];
+    let size = 0;
+    region[seed] = id;
+    stack.push(seed);
+    while (stack.length) {
+      const i = stack.pop()!;
+      size++;
+      const x = i % width;
+      for (const j of [i - width, i + width, x > 0 ? i - 1 : -1, x < width - 1 ? i + 1 : -1]) {
+        if (j < 0 || j >= n || region[j] >= 0 || mask[j]) continue;
+        const dr = data[j * 4] - r0;
+        const dg = data[j * 4 + 1] - g0;
+        const db = data[j * 4 + 2] - b0;
+        if (dr * dr + dg * dg + db * db > COLOUR_REGION_TOLERANCE ** 2) continue;
+        region[j] = id;
+        stack.push(j);
+      }
+    }
+    sizes.push(size);
+  }
+  // Half-width: distance to the nearest pixel of another region (or ink).
+  const notInk = new Uint8Array(n);
+  for (let i = 0; i < n; i++) notInk[i] = mask[i] ? 0 : 1;
+  const toInk = inkDistance(notInk, width, height, false);
+  const interior = new Uint8Array(n);
+  const edgePixels = new Int32Array(sizes.length);
+  const inkEdgePixels = new Int32Array(sizes.length);
+  const touchesBorder = new Uint8Array(sizes.length);
+  for (let i = 0; i < n; i++) {
+    const id = region[i];
+    if (id < 0) continue;
+    const x = i % width;
+    const y = (i - x) / width;
+    if (x === 0 || y === 0 || x === width - 1 || y === height - 1) {
+      touchesBorder[id] = 1;
+      continue;
+    }
+    let edge = false;
+    for (const j of [i - width, i + width, i - 1, i + 1]) if (region[j] !== id) edge = true;
+    if (edge) {
+      edgePixels[id]++;
+      // Anti-aliased pixels between a band and a black line form their own thin region, so
+      // "touching" ink means within a few pixels of it.
+      if (toInk[i] <= COLOURED_LINE_INK_REACH) inkEdgePixels[id]++;
+    } else interior[i] = 1;
+  }
+  const dist = inkDistance(interior, width, height);
+  const peak = new Float32Array(sizes.length);
+  for (let i = 0; i < n; i++)
+    if (region[i] >= 0) peak[region[i]] = Math.max(peak[region[i]], dist[i]);
+  // Thickness along each region's ridge (its middle): even for a drawn line, tapering for a
+  // sliver of fill (wide in the middle, pointed at the ends).
+  const ridge: number[][] = sizes.map(() => []);
+  for (let i = 0; i < n; i++) {
+    const id = region[i];
+    if (id < 0 || !dist[i]) continue;
+    const x = i % width;
+    if (x === 0 || x === width - 1 || i < width || i >= n - width) continue;
+    let top = true;
+    for (const j of [
+      i - width - 1,
+      i - width,
+      i - width + 1,
+      i - 1,
+      i + 1,
+      i + width - 1,
+      i + width,
+      i + width + 1,
+    ]) {
+      if (region[j] === id && dist[j] > dist[i]) top = false;
+    }
+    if (top) ridge[id].push(dist[i]);
+  }
+  // Drawn lines are one flat colour; bands of a smooth gradient (shading in a photo) are not.
+  const sum = new Float64Array(sizes.length);
+  const sumSq = new Float64Array(sizes.length);
+  for (let i = 0; i < n; i++) {
+    const id = region[i];
+    if (id < 0) continue;
+    const l = 0.299 * data[i * 4] + 0.587 * data[i * 4 + 1] + 0.114 * data[i * 4 + 2];
+    sum[id] += l;
+    sumSq[id] += l * l;
+  }
+  const flat = (id: number) => {
+    const mean = sum[id] / sizes[id];
+    return sumSq[id] / sizes[id] - mean * mean <= COLOURED_LINE_MAX_SPREAD ** 2;
+  };
+  const evenWidth = (id: number) => {
+    const r = ridge[id].sort((a, b) => a - b);
+    return (
+      r.length > 0 &&
+      r[Math.floor(r.length / 2)] + 0.5 >= COLOURED_LINE_MIN_EVENNESS * (peak[id] + 0.5)
+    );
+  };
+  const isLine = sizes.map((size, id) => {
+    const half = peak[id] + 0.5;
+    return (
+      !touchesBorder[id] &&
+      half >= Math.max(COLOURED_LINE_MIN_HALF_PX, COLOURED_LINE_MIN_SHARE * blackHalf) &&
+      half <= COLOURED_LINE_MAX_SHARE * blackHalf + 1 &&
+      size >= COLOURED_LINE_MIN_LENGTH * (2 * half) ** 2 &&
+      inkEdgePixels[id] <= COLOURED_LINE_MAX_INK_BORDER * edgePixels[id] &&
+      evenWidth(id) &&
+      flat(id)
+    );
+  });
+  // A strip of fill cut into thin pieces by coloured lines on both sides (the blue between
+  // white ribs) passes the tests above too; it is mostly bordered by other candidates. Drop
+  // those, most-bordered first, until none is left.
+  const reach = COLOURED_LINE_INK_REACH;
+  for (;;) {
+    const bordered = new Int32Array(sizes.length);
+    const edges = new Int32Array(sizes.length);
+    for (let i = 0; i < n; i++) {
+      const id = region[i];
+      if (id < 0 || !isLine[id] || interior[i]) continue;
+      edges[id]++;
+      const x = i % width;
+      const y = (i - x) / width;
+      let near = false;
+      for (let dy = -reach; dy <= reach && !near; dy++) {
+        for (let dx = -reach; dx <= reach; dx++) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+          const other = region[ny * width + nx];
+          if (other >= 0 && other !== id && isLine[other]) {
+            near = true;
+            break;
+          }
+        }
+      }
+      if (near) bordered[id]++;
+    }
+    let worst = -1;
+    let worstShare = COLOURED_LINE_MAX_SHARED_EDGE;
+    for (let id = 0; id < sizes.length; id++) {
+      if (!isLine[id] || !edges[id]) continue;
+      const share = bordered[id] / edges[id];
+      if (share > worstShare) {
+        worstShare = share;
+        worst = id;
+      }
+    }
+    if (worst < 0) break;
+    isLine[worst] = false;
+  }
+  for (let i = 0; i < n; i++) if (region[i] >= 0 && isLine[region[i]]) mask[i] = 1;
+  return isLine.some((v) => v);
+}
+
+/**
+ * The most common half-width of a mask's lines, from the ridge of its distance transform
+ * (pixels at least as far from the edge as all their neighbours). 0 if the mask is empty.
+ */
+function ridgeHalfWidth(mask: Uint8Array, width: number, height: number): number {
+  const dist = inkDistance(mask, width, height);
+  const bins: number[] = [];
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      const i = y * width + x;
+      const d = dist[i];
+      if (!d) continue;
+      let ridge = true;
+      for (let dy = -1; dy <= 1 && ridge; dy++) {
+        for (let dx = -1; dx <= 1; dx++) if (dist[i + dy * width + dx] > d) ridge = false;
+      }
+      if (!ridge) continue;
+      const b = Math.round(d * 2);
+      bins[b] = (bins[b] ?? 0) + 1;
+    }
+  }
+  let best = 0;
+  let bestCount = 0;
+  for (let b = 0; b < bins.length; b++) {
+    const count = (bins[b - 1] ?? 0) + (bins[b] ?? 0) + (bins[b + 1] ?? 0);
+    if (count > bestCount) {
+      bestCount = count;
+      best = b;
+    }
+  }
+  return best / 2;
 }
 
 /** Per-pixel mean RGB over a (2r+1)² box, from summed-area tables. */
@@ -310,7 +538,7 @@ export function checkLineArt(image: RgbaImage): LineArtCheck {
 export function measureLineArt(image: RgbaImage, kind: InkKind, force = false): LineArtCheck {
   const { width, height } = image;
   const ink = inkMask(image, kind);
-  const skeleton = thin(ink, width, height);
+  let skeleton = thin(ink, width, height);
   let inkPixels = 0;
   let skeletonPixels = 0;
   for (let i = 0; i < ink.length; i++) {
@@ -334,7 +562,22 @@ export function measureLineArt(image: RgbaImage, kind: InkKind, force = false): 
         inkFraction <= CONTRAST_MAX_INK_FRACTION &&
         lineWidthPx <= Math.max(3, MAX_LINE_WIDTH_FRACTION * Math.max(width, height)) &&
         lineWidthPx <= CONTRAST_MAX_WIDTH_SHARE * paperRadius(width, height);
-  const paths = isLineArt || force ? penPaths(ink, skeleton, width, height) : skeleton;
+  if (!isLineArt && !force) {
+    return {
+      isLineArt,
+      ink: kind,
+      inkFraction,
+      lineWidthPx,
+      inkMask: ink,
+      skeleton,
+      paths: skeleton,
+    };
+  }
+  // Only once the picture is known to be a drawing: lines drawn in colours other than black.
+  if (kind === 'dark' && addColouredLines(ink, image.data, width, height)) {
+    skeleton = thin(ink, width, height);
+  }
+  const paths = penPaths(ink, skeleton, width, height);
   return { isLineArt, ink: kind, inkFraction, lineWidthPx, inkMask: ink, skeleton, paths };
 }
 

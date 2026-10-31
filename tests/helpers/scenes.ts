@@ -210,3 +210,30 @@ export function texturedPhoto(width = 512, height = 384): RgbaImage {
     })
   );
 }
+
+/**
+ * Flat clip art with lines in colour: a 12 px black square frame filled light blue, with a
+ * 12 px brown cross (window bars) and, above it, a 12 px blue ring of radius 60 (a halo) on white.
+ */
+export const COLOURED = {
+  frame: { x0: 136, y0: 196, x1: 376, y1: 436 },
+  cx: 256,
+  cy: 316,
+  halo: { cy: 110, r: 60 },
+};
+export function colouredLines(): RgbaImage {
+  const { frame, cx, cy, halo } = COLOURED;
+  return jpegRoundTrip(
+    canvas(512, 512, (x, y) => {
+      const inFrame = x >= frame.x0 && x <= frame.x1 && y >= frame.y0 && y <= frame.y1;
+      const border =
+        inFrame &&
+        (x < frame.x0 + 12 || x > frame.x1 - 12 || y < frame.y0 + 12 || y > frame.y1 - 12);
+      if (border) return [15, 15, 15];
+      if (inFrame && (Math.abs(x - cx) <= 6 || Math.abs(y - cy) <= 6)) return [166, 121, 57];
+      if (inFrame) return [146, 211, 245];
+      if (Math.abs(Math.hypot(x - cx, y - halo.cy) - halo.r) <= 6) return [97, 178, 228];
+      return [255, 255, 255];
+    })
+  );
+}
