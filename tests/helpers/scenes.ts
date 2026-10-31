@@ -167,3 +167,26 @@ export function markerDoodle(colour: number[], watermark = false): RgbaImage {
     })
   );
 }
+
+/**
+ * A cartoon with large black fills (a cowl): a 300 × 200 black block around (256, 300), a
+ * navy patch inside it, and a 5 px black line above it. JPEG round-tripped.
+ */
+export const FILLED = {
+  block: { x0: 106, y0: 200, x1: 406, y1: 400 },
+  navy: { x0: 156, y0: 230, x1: 256, y1: 280 },
+  line: { y: 120, x0: 120, x1: 390 },
+};
+export function filledCartoon(): RgbaImage {
+  const { block, navy, line } = FILLED;
+  const inside = (b: typeof navy, x: number, y: number) =>
+    x >= b.x0 && x <= b.x1 && y >= b.y0 && y <= b.y1;
+  return jpegRoundTrip(
+    canvas(512, 512, (x, y) => {
+      if (inside(navy, x, y)) return [32, 28, 92];
+      if (inside(block, x, y)) return [5, 5, 8];
+      if (Math.abs(y - line.y) <= 2.5 && x >= line.x0 && x <= line.x1) return [10, 10, 10];
+      return [255, 255, 255];
+    })
+  );
+}

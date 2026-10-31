@@ -123,10 +123,12 @@ orders the strokes.
      than the paper (black and dark-coloured pens); if that finds no drawing, pixels clearly
      darker than the paper *around them* (light coloured markers, pencil, a photo of paper
      with uneven light), as long as the lines stay thin. Coloured fills and their shading are
-     not ink. Solid shapes (eye dots, a nose, a filled ear: thick everywhere and short for
-     their thickness) and parts at least 3× as thick as the drawing's typical line (a heavy
-     band around an eye) are drawn by their outline instead, with lines that run into them
-     joined to that outline.
+     not ink, dark ones (navy, maroon) included. Solid shapes (eye dots, a nose, a filled
+     ear: thick everywhere and short for their thickness) and parts at least 3× as thick as
+     the drawing's typical line (a heavy band around an eye, a black cowl) are drawn by their
+     outline instead, with lines that run into them joined to that outline. The typical line
+     is the most common line thickness, not the average, so large black fills don't count
+     as "lines".
    - Photo: `edges.ts` runs Canny edge detection (blur → Sobel → thin → hysteresis), with a
      minimum contrast so flat, noisy backgrounds stay blank, refined to sub-pixel accuracy.
      Tracing edges on a line drawing would draw both sides of every line.

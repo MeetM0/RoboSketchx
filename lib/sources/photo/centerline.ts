@@ -13,6 +13,11 @@ const PINHOLE_SIZE = 0.006;
 const SATURATED_INK_MAX_LUMA = 50;
 /** Lines wider than this share of the image's longest side are areas, not lines. */
 const MAX_LINE_WIDTH_FRACTION = 0.04;
+/** Dark pixels this colourful (max − min channels, and that share of the brightest) are fills. */
+const DARK_FILL_CHROMA = 40;
+const DARK_FILL_SATURATION = 0.5;
+/** Radius (pixels) of the blur the fill colour is judged on. */
+const FILL_COLOUR_RADIUS = 2;
 /** max − min channel difference above which a colour counts as saturated. */
 const SATURATED_CHROMA = 80;
 
@@ -50,12 +55,27 @@ export function inkMask(image: RgbaImage, kind: InkKind = 'dark'): Uint8Array {
   const mask = new Uint8Array(n);
   if (kind === 'dark') {
     const threshold = Math.min(85, Math.max(40, paper * 0.32));
+    // Colour judged on a lightly blurred copy: JPEG stores colour at half resolution in blocks,
+    // so per-pixel colour makes the edge of a coloured fill ragged.
+    const mean = boxMean(data, width, height, FILL_COLOUR_RADIUS);
     for (let i = 0; i < n; i++) {
       if (luma[i] >= threshold) continue;
       const p = i * 4;
       const chroma =
         Math.max(data[p], data[p + 1], data[p + 2]) - Math.min(data[p], data[p + 1], data[p + 2]);
       if (chroma > SATURATED_CHROMA && luma[i] >= SATURATED_INK_MAX_LUMA) continue;
+      // A dark but clearly coloured fill (navy, maroon), not a black line.
+      const r = mean[i * 3];
+      const g = mean[i * 3 + 1];
+      const b = mean[i * 3 + 2];
+      const max = Math.max(r, g, b);
+      const meanChroma = max - Math.min(r, g, b);
+      // The pixel itself must be coloured too, or a thin black line on a red fill would go.
+      const isFill =
+        chroma >= DARK_FILL_CHROMA / 2 &&
+        meanChroma >= DARK_FILL_CHROMA &&
+        meanChroma >= DARK_FILL_SATURATION * max;
+      if (isFill) continue;
       mask[i] = 1;
     }
   } else {
@@ -106,6 +126,37 @@ export function inkMask(image: RgbaImage, kind: InkKind = 'dark'): Uint8Array {
   for (let x = 0; x < width; x++) mask[x] = mask[(height - 1) * width + x] = 0;
   for (let y = 0; y < height; y++) mask[y * width] = mask[y * width + width - 1] = 0;
   return mask;
+}
+
+/** Per-pixel mean RGB over a (2r+1)² box, from summed-area tables. */
+function boxMean(data: Uint8Array, width: number, height: number, r: number): Float32Array {
+  const w1 = width + 1;
+  const sums = [0, 1, 2].map(() => new Float64Array(w1 * (height + 1)));
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const p = (y * width + x) * 4;
+      const o = (y + 1) * w1 + x + 1;
+      for (let c = 0; c < 3; c++) {
+        sums[c][o] = data[p + c] + sums[c][o - 1] + sums[c][o - w1] - sums[c][o - w1 - 1];
+      }
+    }
+  }
+  const out = new Float32Array(width * height * 3);
+  for (let y = 0; y < height; y++) {
+    const y0 = Math.max(0, y - r);
+    const y1 = Math.min(height, y + r + 1);
+    for (let x = 0; x < width; x++) {
+      const x0 = Math.max(0, x - r);
+      const x1 = Math.min(width, x + r + 1);
+      const area = (x1 - x0) * (y1 - y0);
+      for (let c = 0; c < 3; c++) {
+        const t = sums[c];
+        out[(y * width + x) * 3 + c] =
+          (t[y1 * w1 + x1] - t[y0 * w1 + x1] - t[y1 * w1 + x0] + t[y0 * w1 + x0]) / area;
+      }
+    }
+  }
+  return out;
 }
 
 /**
@@ -275,11 +326,11 @@ export function measureLineArt(image: RgbaImage, kind: InkKind, force = false): 
   return { isLineArt, ink: kind, inkFraction, lineWidthPx, inkMask: ink, skeleton, paths };
 }
 
-/** Thickness factor over the median line's half-width at which ink counts as a solid shape. */
+/** Thickness factor over the typical line's half-width at which ink counts as a solid shape. */
 const SOLID_THICKNESS = 1.8;
 /** A solid shape's thick core is at most this many peak half-widths long (else a bold line). */
 const SOLID_MAX_LENGTH = 6;
-/** Ink at least this many median half-widths thick is drawn by its outline, whatever its length. */
+/** Ink at least this many typical line half-widths thick is drawn by its outline, whatever its length. */
 const BAND_THICKNESS = 3;
 /** ...and at least this thick (pixels), so drawings with hairlines don't outline ordinary lines. */
 const BAND_MIN_HALF_WIDTH = 4;
@@ -290,12 +341,18 @@ const SOLID_GROW_PX = 2;
  * Chamfer (3-4) distance from each ink pixel to the nearest paper pixel, in pixels: half the
  * local line width at a line's centre.
  */
-export function inkDistance(ink: Uint8Array, width: number, height: number): Float32Array {
+export function inkDistance(
+  ink: Uint8Array,
+  width: number,
+  height: number,
+  edgeIsPaper = true
+): Float32Array {
   const d = new Float32Array(ink.length);
   const far = 1e9;
   for (let i = 0; i < ink.length; i++) d[i] = ink[i] ? far : 0;
+  const outside = edgeIsPaper ? 0 : far;
   const at = (x: number, y: number) =>
-    x < 0 || y < 0 || x >= width || y >= height ? 0 : d[y * width + x];
+    x < 0 || y < 0 || x >= width || y >= height ? outside : d[y * width + x];
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const i = y * width + x;
@@ -327,6 +384,30 @@ export function inkDistance(ink: Uint8Array, width: number, height: number): Flo
 }
 
 /**
+ * The drawing's typical line half-width: the most common centre-line thickness (in half-pixel
+ * bins, smoothed over neighbours). Not the median: in a cartoon with large black fills most of
+ * the centre line runs through the fills, which would make the fills the "typical line".
+ */
+function typicalHalfWidth(skeleton: Uint8Array, dist: Float32Array): number {
+  const bins: number[] = [];
+  for (let i = 0; i < skeleton.length; i++) {
+    if (!skeleton[i]) continue;
+    const b = Math.round(dist[i] * 2);
+    bins[b] = (bins[b] ?? 0) + 1;
+  }
+  let best = 2;
+  let bestCount = -1;
+  for (let b = 0; b < bins.length; b++) {
+    const count = (bins[b - 1] ?? 0) + (bins[b] ?? 0) + (bins[b + 1] ?? 0);
+    if (count > bestCount) {
+      bestCount = count;
+      best = b;
+    }
+  }
+  return Math.max(1, best / 2);
+}
+
+/**
  * The pixels the pen follows. Lines (long relative to their width, however bold) keep their
  * centre line. Solid shapes (eyes, noses, a filled ear or mouth: thick everywhere and short
  * for their thickness) are drawn by their outline instead, since a centre line through a dot
@@ -340,11 +421,8 @@ export function penPaths(
   height: number
 ): Uint8Array {
   const dist = inkDistance(ink, width, height);
-  const halfWidths: number[] = [];
-  for (let i = 0; i < skeleton.length; i++) if (skeleton[i]) halfWidths.push(dist[i]);
-  halfWidths.sort((a, b) => a - b);
-  const medianHalf = halfWidths.length ? halfWidths[Math.floor(halfWidths.length / 2)] : 1;
-  const thick = Math.max(2.5, SOLID_THICKNESS * medianHalf);
+  const lineHalf = typicalHalfWidth(skeleton, dist);
+  const thick = Math.max(2.5, SOLID_THICKNESS * lineHalf);
 
   const paths = skeleton.slice();
   const solid = new Uint8Array(ink.length);
@@ -377,7 +455,8 @@ export function penPaths(
     // The thick seed, then everything joined to it that stays at least 60 % as thick as its
     // peak. A bold line runs on for many widths at that thickness; a solid shape soon ends.
     const seed = component(start, (n) => dist[n] >= thick);
-    const peak = Math.max(...seed.map((i) => dist[i]));
+    let peak = 0;
+    for (const i of seed) peak = Math.max(peak, dist[i]);
     const core = [...seed, ...component(seed[0], (n) => dist[n] >= 0.6 * peak)];
     // Area of a strip 0.8 x peak wide, i.e. its length in widths: see SOLID_MAX_LENGTH.
     if (core.length > SOLID_MAX_LENGTH * 0.8 * peak * peak) continue;
@@ -397,18 +476,14 @@ export function penPaths(
   // Parts far thicker than the drawing's lines (a heavy brush band around an eye, a filled
   // patch) are drawn by their outline however long they are: their centre line alone would
   // lose the shape. Bold lines stay well under this.
-  const band = Math.max(BAND_MIN_HALF_WIDTH, BAND_THICKNESS * medianHalf);
+  // Morphological opening: every ink pixel inside a disc of radius `band` that fits in the ink.
+  // It covers the thick part right up to its edge; narrow tips and lines stay out.
+  const band = Math.max(BAND_MIN_HALF_WIDTH, BAND_THICKNESS * lineHalf);
+  const notCore = new Uint8Array(ink.length);
+  for (let i = 0; i < ink.length; i++) notCore[i] = dist[i] >= band ? 0 : 1;
+  const toCore = inkDistance(notCore, width, height, false);
   for (let i = 0; i < ink.length; i++) {
-    if (!skeleton[i] || dist[i] < band) continue;
-    const cx = i % width;
-    const cy = (i - cx) / width;
-    const r = Math.ceil(dist[i]) + 1;
-    for (let y = Math.max(0, cy - r); y <= Math.min(height - 1, cy + r); y++) {
-      for (let x = Math.max(0, cx - r); x <= Math.min(width - 1, cx + r); x++) {
-        const j = y * width + x;
-        if (ink[j] && (x - cx) ** 2 + (y - cy) ** 2 <= r * r) solid[j] = 1;
-      }
-    }
+    if (ink[i] && toCore[i] <= band + 0.5) solid[i] = 1;
   }
 
   // A separate ink shape that is short for its own thickness is a dot, however thin (a small
@@ -458,7 +533,7 @@ export function penPaths(
 
   // A line running into a solid shape now stops at the shape, about half a line width short
   // of its outline. Bridge each such cut to the nearest outline pixel so the join is drawn.
-  const reach = Math.ceil(2 * medianHalf) + SOLID_GROW_PX + 1;
+  const reach = Math.ceil(2 * lineHalf) + SOLID_GROW_PX + 1;
   for (let y = 1; y < height - 1; y++) {
     for (let x = 1; x < width - 1; x++) {
       const i = y * width + x;

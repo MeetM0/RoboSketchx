@@ -10,6 +10,8 @@ import {
   CARTOON,
   diskScene,
   DOODLE,
+  FILLED,
+  filledCartoon,
   inkedCartoon,
   lineArt,
   markerDoodle,
@@ -232,4 +234,31 @@ test('P4: a line running into a solid shape is joined to its outline (no gap)', 
   );
   console.log(`  the line's stroke comes within ${reach.toFixed(2)} px of the dot's outline`);
   assert.ok(reach <= 1.5, 'joined to the outline');
+});
+
+test('P4: in a cartoon with large black fills, the fills are drawn by their outline', () => {
+  const result = run(filledCartoon(), 'lines');
+  const { block, navy, line } = FILLED;
+  const points = samples(result);
+  const nearEdge = (b: typeof block) =>
+    points.filter((p) => {
+      const dx = Math.min(Math.abs(p.x - b.x0), Math.abs(p.x - b.x1));
+      const dy = Math.min(Math.abs(p.y - b.y0), Math.abs(p.y - b.y1));
+      const inX = p.x > b.x0 + 4 && p.x < b.x1 - 4;
+      const inY = p.y > b.y0 + 4 && p.y < b.y1 - 4;
+      return (inX && dy < 3) || (inY && dx < 3);
+    }).length;
+  // Well inside the black (away from the navy patch): no centre lines.
+  const interior = points.filter((p) => p.x > 290 && p.x < 380 && p.y > 300 && p.y < 375).length;
+  const onLine = points.filter((p) => Math.abs(p.y - line.y) < 3).length;
+  console.log(
+    `  block edge ${nearEdge(block)}, navy edge ${nearEdge(navy)}, interior ${interior}, line ${onLine}`
+  );
+  assert.ok(nearEdge(block) > 0.8 * 2 * (300 + 200), 'the black block is outlined');
+  assert.ok(nearEdge(navy) > 0.8 * 2 * (100 + 50), 'the navy patch inside it is outlined');
+  assert.equal(interior, 0, 'no centre lines through the fill');
+  assert.ok(
+    onLine > 0.8 * (line.x1 - line.x0) && onLine < 1.2 * (line.x1 - line.x0),
+    'the thin line drawn once'
+  );
 });
