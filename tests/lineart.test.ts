@@ -47,6 +47,28 @@ test('P4: a thick black outline is drawn once, along its middle (not as two edge
   assert.ok(median <= 1.5, 'along the middle of the 9 px line');
 });
 
+test('P4: a solid shape (an eye dot) is drawn as its outline, not a dash through it', () => {
+  const result = run(inkedCartoon());
+  const { dot } = CARTOON;
+  const near = framePoints(result).flatMap((s) => {
+    const parts: { x: number; y: number }[][] = [[]];
+    for (const p of s) {
+      if (Math.hypot(p.x - dot.x, p.y - dot.y) < dot.r + 6) parts.at(-1)!.push(p);
+      else if (parts.at(-1)!.length) parts.push([]);
+    }
+    return parts.filter((part) => part.length > 1);
+  });
+  const drawn = near.reduce((sum, s) => sum + length(s), 0);
+  const radii = near.flat().map((p) => Math.hypot(p.x - dot.x, p.y - dot.y));
+  const meanRadius = radii.reduce((a, b) => a + b, 0) / Math.max(1, radii.length);
+  const perimeter = 2 * Math.PI * dot.r;
+  console.log(
+    `  dot drawn ${drawn.toFixed(0)} px (outline ${perimeter.toFixed(0)} px), mean radius ${meanRadius.toFixed(1)} px (dot ${dot.r} px)`
+  );
+  assert.ok(drawn > 0.7 * perimeter && drawn < 1.3 * perimeter, 'once around the dot');
+  assert.ok(Math.abs(meanRadius - dot.r) <= 2, 'along its edge');
+});
+
 test('P4: auto mode traces line drawings as lines and keeps edges for photos', () => {
   const traceOf = (image: ReturnType<typeof inkedCartoon>) =>
     (run(image) as { trace?: string }).trace;

@@ -113,9 +113,11 @@ export type LineArtCheck = {
   inkFraction: number;
   /** Average ink line width in pixels (ink area / centre-line length). */
   lineWidthPx: number;
-  /** Ink mask and its one-pixel centre lines, reused for tracing. */
+  /** Ink mask and its one-pixel centre lines. */
   ink: Uint8Array;
   skeleton: Uint8Array;
+  /** What the pen should follow: centre lines of lines, outlines of solid shapes. */
+  paths: Uint8Array;
 };
 
 /**
@@ -139,35 +141,175 @@ export function checkLineArt(image: RgbaImage): LineArtCheck {
     skeletonPixels >= (width + height) / 2 &&
     inkFraction <= 0.3 &&
     lineWidthPx <= Math.max(3, MAX_LINE_WIDTH_FRACTION * Math.max(width, height));
-  return { isLineArt, inkFraction, lineWidthPx, ink, skeleton };
+  const paths = isLineArt ? penPaths(ink, skeleton, width, height) : skeleton;
+  return { isLineArt, inkFraction, lineWidthPx, ink, skeleton, paths };
+}
+
+/** Thickness factor over the median line's half-width at which ink counts as a solid shape. */
+const SOLID_THICKNESS = 1.8;
+/** A solid shape's thick core is at most this many peak half-widths long (else a bold line). */
+const SOLID_MAX_LENGTH = 6;
+
+/**
+ * Chamfer (3-4) distance from each ink pixel to the nearest paper pixel, in pixels: half the
+ * local line width at a line's centre.
+ */
+export function inkDistance(ink: Uint8Array, width: number, height: number): Float32Array {
+  const d = new Float32Array(ink.length);
+  const far = 1e9;
+  for (let i = 0; i < ink.length; i++) d[i] = ink[i] ? far : 0;
+  const at = (x: number, y: number) =>
+    x < 0 || y < 0 || x >= width || y >= height ? 0 : d[y * width + x];
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = y * width + x;
+      if (!d[i]) continue;
+      d[i] = Math.min(
+        d[i],
+        at(x - 1, y) + 3,
+        at(x, y - 1) + 3,
+        at(x - 1, y - 1) + 4,
+        at(x + 1, y - 1) + 4
+      );
+    }
+  }
+  for (let y = height - 1; y >= 0; y--) {
+    for (let x = width - 1; x >= 0; x--) {
+      const i = y * width + x;
+      if (!d[i]) continue;
+      d[i] = Math.min(
+        d[i],
+        at(x + 1, y) + 3,
+        at(x, y + 1) + 3,
+        at(x + 1, y + 1) + 4,
+        at(x - 1, y + 1) + 4
+      );
+    }
+  }
+  for (let i = 0; i < d.length; i++) d[i] /= 3;
+  return d;
 }
 
 /**
- * Traced centre-line chains stop one pixel short of the line they join (that pixel belongs to
- * the other chain). Extends each chain end onto a touching centre-line pixel that isn't part of
- * its own last few points, so T-junctions are drawn closed instead of with a 0.5 mm gap.
+ * The pixels the pen follows. Lines (long relative to their width, however bold) keep their
+ * centre line. Solid shapes (eyes, noses, a filled ear or mouth: thick everywhere and short
+ * for their thickness) are drawn by their outline instead, since a centre line through a dot
+ * is a meaningless dash and through a large patch a web of cells. Shapes are found from the
+ * ink's thickness, not the centre line: thinning can erase a small round blob entirely.
+ */
+export function penPaths(
+  ink: Uint8Array,
+  skeleton: Uint8Array,
+  width: number,
+  height: number
+): Uint8Array {
+  const dist = inkDistance(ink, width, height);
+  const halfWidths: number[] = [];
+  for (let i = 0; i < skeleton.length; i++) if (skeleton[i]) halfWidths.push(dist[i]);
+  halfWidths.sort((a, b) => a - b);
+  const medianHalf = halfWidths.length ? halfWidths[Math.floor(halfWidths.length / 2)] : 1;
+  const thick = Math.max(2.5, SOLID_THICKNESS * medianHalf);
+
+  const paths = skeleton.slice();
+  const solid = new Uint8Array(ink.length);
+  const seen = new Uint8Array(ink.length);
+  const component = (start: number, accept: (i: number) => boolean) => {
+    const out = [start];
+    seen[start] = 1;
+    for (let k = 0; k < out.length; k++) {
+      const i = out[k];
+      const x = i % width;
+      const y = (i - x) / width;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+          const n = ny * width + nx;
+          if (!seen[n] && accept(n)) {
+            seen[n] = 1;
+            out.push(n);
+          }
+        }
+      }
+    }
+    return out;
+  };
+
+  for (let start = 0; start < ink.length; start++) {
+    if (seen[start] || dist[start] < thick) continue;
+    // The thick seed, then everything joined to it that stays at least 60 % as thick as its
+    // peak. A bold line runs on for many widths at that thickness; a solid shape soon ends.
+    const seed = component(start, (n) => dist[n] >= thick);
+    const peak = Math.max(...seed.map((i) => dist[i]));
+    const core = [...seed, ...component(seed[0], (n) => dist[n] >= 0.6 * peak)];
+    // Area of a strip 0.8 x peak wide, i.e. its length in widths: see SOLID_MAX_LENGTH.
+    if (core.length > SOLID_MAX_LENGTH * 0.8 * peak * peak) continue;
+    for (const i of core) {
+      const cx = i % width;
+      const cy = (i - cx) / width;
+      const r = Math.ceil(dist[i]) + 1;
+      for (let y = Math.max(0, cy - r); y <= Math.min(height - 1, cy + r); y++) {
+        for (let x = Math.max(0, cx - r); x <= Math.min(width - 1, cx + r); x++) {
+          const j = y * width + x;
+          if (ink[j] && (x - cx) ** 2 + (y - cy) ** 2 <= r * r) solid[j] = 1;
+        }
+      }
+    }
+  }
+
+  // Ink with nothing left to draw (a blob the thinning erased) is a solid shape too.
+  const { labels, sizes } = labelRegions(ink, width, height, 1);
+  const drawn = new Uint8Array(sizes.length);
+  for (let i = 0; i < ink.length; i++) if (ink[i] && (paths[i] || solid[i])) drawn[labels[i]] = 1;
+  for (let i = 0; i < ink.length; i++) if (ink[i] && !drawn[labels[i]]) solid[i] = 1;
+
+  // Inside solid shapes: drop the centre lines and draw the edge against the paper instead.
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = y * width + x;
+      if (!solid[i]) continue;
+      paths[i] = 0;
+      const onEdge =
+        (x > 0 && !ink[i - 1]) ||
+        (x < width - 1 && !ink[i + 1]) ||
+        (y > 0 && !ink[i - width]) ||
+        (y < height - 1 && !ink[i + width]);
+      if (onEdge) paths[i] = 1;
+    }
+  }
+  return paths;
+}
+
+/** How far (pixels) a chain end may reach to touch the line or outline it stops short of. */
+const JUNCTION_REACH = 2;
+
+/**
+ * Traced chains stop short of the line they join: by one pixel at a T-junction (that pixel
+ * belongs to the other chain), by up to two where a line meets a solid shape's outline.
+ * Extends each chain end onto the nearest pen-path pixel within reach that isn't part of its
+ * own last few points, so joins are drawn closed instead of with a 0.5–1 mm gap.
  */
 export function closeJunctions(
   chains: Polyline[],
-  skeleton: Uint8Array,
+  paths: Uint8Array,
   width: number,
   height: number
 ): Polyline[] {
   const extend = (chain: Polyline, atEnd: boolean): Polyline => {
     const tip = atEnd ? chain[chain.length - 1] : chain[0];
-    const own = (atEnd ? chain.slice(-4) : chain.slice(0, 4)).map((p) => `${p.x},${p.y}`);
+    const own = new Set((atEnd ? chain.slice(-8) : chain.slice(0, 8)).map((p) => `${p.x},${p.y}`));
     let best: Point | null = null;
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
+    let bestDistance = Infinity;
+    for (let dy = -JUNCTION_REACH; dy <= JUNCTION_REACH; dy++) {
+      for (let dx = -JUNCTION_REACH; dx <= JUNCTION_REACH; dx++) {
         const x = tip.x + dx;
         const y = tip.y + dy;
         if ((!dx && !dy) || x < 0 || y < 0 || x >= width || y >= height) continue;
-        if (!skeleton[y * width + x] || own.includes(`${x},${y}`)) continue;
-        // Prefer an orthogonal neighbour (closer) over a diagonal one.
-        if (
-          !best ||
-          Math.abs(dx) + Math.abs(dy) < Math.abs(best.x - tip.x) + Math.abs(best.y - tip.y)
-        ) {
+        if (!paths[y * width + x] || own.has(`${x},${y}`)) continue;
+        const d = Math.hypot(dx, dy);
+        if (d < bestDistance) {
+          bestDistance = d;
           best = { x, y };
         }
       }

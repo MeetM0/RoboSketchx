@@ -94,18 +94,18 @@ export function imageToSketch(
 }
 
 /**
- * Line drawings: traces the centre of each ink line (see `centerline.ts`) instead of its two
- * edges, so every drawn line becomes one pen stroke.
+ * Line drawings: traces the centre of each ink line and the outline of each solid shape (see
+ * `centerline.ts`) instead of the two edges of every line, so each drawn line is one stroke.
  */
 export function lineArtToSketch(
   image: RgbaImage,
   options: SketchOptions,
   mmPerPx = defaultMmPerPx(image.width, image.height),
-  skeleton = checkLineArt(image).skeleton
+  paths = checkLineArt(image).paths
 ): Sketch {
   const { width, height } = image;
   return chainsToSketch(
-    closeJunctions(traceEdges(skeleton, width, height), skeleton, width, height),
+    closeJunctions(traceEdges(paths, width, height), paths, width, height),
     width,
     height,
     resolveThresholds(options, mmPerPx)

@@ -18,5 +18,12 @@ export {
   type PhotoSketch,
   type TraceMode,
 } from './photo';
-export { checkLineArt, inkMask, thin, type LineArtCheck } from './centerline';
+export {
+  checkLineArt,
+  inkDistance,
+  inkMask,
+  penPaths,
+  thin,
+  type LineArtCheck,
+} from './centerline';
 export * from './pipeline';

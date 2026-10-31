@@ -113,7 +113,9 @@ orders the strokes.
    (cartoon, inked sketch: thin dark lines on light paper) or a **photo**.
    - Line drawing: find the ink (pixels clearly darker than the paper; coloured fills and
      their shading excluded), thin every ink line to its one-pixel centre (Zhang–Suen), and
-     trace that, so each drawn line becomes one pen stroke.
+     trace that, so each drawn line becomes one pen stroke. Solid shapes (eye dots, a nose,
+     a filled ear: thick everywhere and short for their thickness) are drawn by their outline
+     instead.
    - Photo: `edges.ts` runs Canny edge detection (blur → Sobel → thin → hysteresis), with a
      minimum contrast so flat, noisy backgrounds stay blank, refined to sub-pixel accuracy.
      Tracing edges on a line drawing would draw both sides of every line.

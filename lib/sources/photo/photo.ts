@@ -83,7 +83,7 @@ export function photoToSketch(image: RgbaImage, options: PhotoOptions): PhotoSke
   return {
     sketch:
       trace === 'lines'
-        ? lineArtToSketch(input, preset, mmPerPx, lineArt!.skeleton)
+        ? lineArtToSketch(input, preset, mmPerPx, lineArt!.paths)
         : imageToSketch(input, preset, mmPerPx),
     traced,
     crop,
