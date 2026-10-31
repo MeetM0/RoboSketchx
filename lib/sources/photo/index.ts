@@ -1,5 +1,5 @@
 // Photo → pen strokes. Order of work: decode → find subject & crop (photo.ts, background.ts)
-// → edges (edges.ts) → pixel chains (trace.ts) → clean chains (chains.ts) → strokes (pipeline.ts).
+// → line drawing? centre lines (centerline.ts) : edges (edges.ts) → pixel chains (trace.ts) → clean chains (chains.ts) → strokes (pipeline.ts).
 export {
   applyMask,
   backgroundPathData,
@@ -16,5 +16,7 @@ export {
   type CropRect,
   type PhotoOptions,
   type PhotoSketch,
+  type TraceMode,
 } from './photo';
+export { checkLineArt, inkMask, thin, type LineArtCheck } from './centerline';
 export * from './pipeline';

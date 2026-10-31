@@ -69,7 +69,8 @@ export function linkChains(chains: Polyline[], maxGap: number, maxAngleDeg: numb
     // b's chain must head back along a's direction, and the jump must point the same way.
     if (dot(aOut, { x: -bOut.x, y: -bOut.y }) < cosLimit) return false;
     const d = dist(a, b);
-    if (d < 0.5) return true;
+    // Touching pixels (8-connected, d <= sqrt 2): the jump's direction is just pixel steps.
+    if (d <= Math.SQRT2 + 1e-9) return true;
     return dot(aOut, { x: (b.x - a.x) / d, y: (b.y - a.y) / d }) >= cosLimit;
   };
 

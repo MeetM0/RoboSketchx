@@ -22,6 +22,7 @@ import {
   photoToSketch,
   type BackgroundRemoval,
   type PhotoSketch,
+  type TraceMode,
 } from '@/lib/sources/photo';
 import { pickImage, type PickedImage } from '@/platform/pick-image';
 import { preparePhoto } from '@/platform/prepare-photo';
@@ -40,6 +41,13 @@ const BACKGROUND_OPTIONS = [
 
 type BackgroundMode = (typeof BACKGROUND_OPTIONS)[number]['value'];
 
+const TRACE_OPTIONS = [
+  { value: 'lines', label: 'Line drawing' },
+  { value: 'edges', label: 'Photo' },
+] as const;
+
+type Settings = { detail: DetailLevel; background: BackgroundMode; trace: TraceMode };
+
 const VIEW_OPTIONS = [
   { value: 'sketch', label: 'Drawing' },
   { value: 'photo', label: 'Photo' },
@@ -55,7 +63,7 @@ const REMOVAL_FAILURE_MESSAGES: Record<
   'no-subject': "Couldn't find a clear subject, so the whole photo is drawn.",
 };
 
-// Edge detection runs on the JS thread; yield first so the progress state can render.
+// Tracing runs on the JS thread; yield first so the progress state can render.
 const nextFrame = () => new Promise((resolve) => setTimeout(resolve, 50));
 
 /** Your own photo, traced into pen lines; background removal and detail level adjustable. */
@@ -68,17 +76,20 @@ export function PhotoMode({ toolbar }: { toolbar: ReactNode }) {
   const [result, setResult] = useState<PhotoSketch | null>(null);
   const [detail, setDetail] = useState<DetailLevel>('medium');
   const [background, setBackground] = useState<BackgroundMode>('remove');
+  // 'auto' until the person picks: the engine detects line drawings itself.
+  const [trace, setTrace] = useState<TraceMode>('auto');
   const [view, setView] = useState<'sketch' | 'photo'>('sketch');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Bumped on every new request so results from an older, slower request are ignored.
   const jobRef = useRef(0);
 
-  async function generate(job: number, image: RgbaImage, level: DetailLevel, mode: BackgroundMode) {
+  async function generate(job: number, image: RgbaImage, options: Settings) {
     await nextFrame();
     const next = photoToSketch(image, {
-      detail: level,
-      removeBackground: mode === 'remove',
+      detail: options.detail,
+      removeBackground: options.background === 'remove',
+      trace: options.trace,
       settings,
     });
     if (job === jobRef.current) setResult(next);
@@ -111,23 +122,29 @@ export function PhotoMode({ toolbar }: { toolbar: ReactNode }) {
     setSource(null);
     setResult(null);
     setView('sketch');
+    setTrace('auto');
     await run(async (job) => {
       const { uri, width, height } = asset;
       const image = decodeJpegBase64(await preparePhoto(uri, width, height, PHOTO_WORK_SIZE));
       if (job !== jobRef.current) return;
       setSource(image);
-      await generate(job, image, detail, background);
+      await generate(job, image, { detail, background, trace: 'auto' });
     });
   }
 
   function changeDetail(level: DetailLevel) {
     setDetail(level);
-    if (source) run((job) => generate(job, source, level, background));
+    if (source) run((job) => generate(job, source, { detail: level, background, trace }));
   }
 
   function changeBackground(mode: BackgroundMode) {
     setBackground(mode);
-    if (source) run((job) => generate(job, source, detail, mode));
+    if (source) run((job) => generate(job, source, { detail, background: mode, trace }));
+  }
+
+  function changeTrace(mode: 'lines' | 'edges') {
+    setTrace(mode);
+    if (source) run((job) => generate(job, source, { detail, background, trace: mode }));
   }
 
   const sketch = result?.sketch ?? null;
@@ -256,6 +273,20 @@ export function PhotoMode({ toolbar }: { toolbar: ReactNode }) {
                 Faded areas are background and won&apos;t be drawn.
               </Text>
             )}
+          </Section>
+          <Section
+            title="Trace as"
+            footer={
+              (trace === 'auto' ? 'Picked automatically. ' : '') +
+              'Line drawing follows the middle of each dark line, for cartoons and sketches. Photo traces the outlines of shapes.'
+            }>
+            <Segmented
+              label="Trace as"
+              options={TRACE_OPTIONS}
+              value={trace === 'auto' ? (result?.trace ?? 'lines') : trace}
+              onChange={changeTrace}
+              disabled={busy}
+            />
           </Section>
           <Section title="Background">
             <Segmented

@@ -73,6 +73,34 @@ export function lineArt(width: number, height: number, ink: (x: number, y: numbe
   );
 }
 
+/**
+ * An inked cartoon: a red disc with a darker red shading band, a 9 px black outline of
+ * radius 150 around (256, 256), and a shallow black chord joining the outline at both ends
+ * (rising to the right, so its pixels form a staircase). JPEG round-tripped like a picked image.
+ */
+export const CARTOON = { cx: 256, cy: 256, r: 150, outline: 9 };
+export function inkedCartoon(): RgbaImage {
+  const { cx, cy, r, outline } = CARTOON;
+  const chord = { x0: cx - 160, y0: cy + 27, x1: cx + 160, y1: cy - 27 };
+  const toChord = (x: number, y: number) => {
+    const dx = chord.x1 - chord.x0;
+    const dy = chord.y1 - chord.y0;
+    const t = Math.max(
+      0,
+      Math.min(1, ((x - chord.x0) * dx + (y - chord.y0) * dy) / (dx * dx + dy * dy))
+    );
+    return Math.hypot(x - (chord.x0 + t * dx), y - (chord.y0 + t * dy));
+  };
+  return jpegRoundTrip(
+    canvas(512, 512, (x, y) => {
+      const d = Math.hypot(x - cx, y - cy);
+      if (Math.abs(d - r) <= outline / 2 || (d < r && toChord(x, y) <= 3)) return [20, 20, 20];
+      if (d < r) return x - cx > 60 ? [190, 40, 48] : [225, 60, 70];
+      return [255, 255, 255];
+    })
+  );
+}
+
 /** A soft-edged grey disk on a darker grey background (not line art: one boundary edge). */
 export function diskScene(width = 512, height = 384): RgbaImage {
   const noise = rng(9);

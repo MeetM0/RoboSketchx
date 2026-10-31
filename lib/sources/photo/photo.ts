@@ -1,7 +1,8 @@
 import type { DetailLevel, RgbaImage, Sketch } from '../../geometry/types';
 import type { PlotterSettings } from '../../plot/settings';
 import { applyMask, removeBackground, type BackgroundRemoval } from './background';
-import { DETAIL_PRESETS, imageToSketch } from './pipeline';
+import { checkLineArt } from './centerline';
+import { DETAIL_PRESETS, imageToSketch, lineArtToSketch } from './pipeline';
 
 /** Longest side of the photo the app decodes (crop source). */
 export const PHOTO_WORK_SIZE = 1024;
@@ -20,16 +21,27 @@ export type PhotoSketch = {
   crop: CropRect;
   /** Background removal on `traced` (null when removal was off). */
   removal: BackgroundRemoval | null;
+  /** How the strokes were traced: centre of ink lines, or edges of shapes. */
+  trace: 'lines' | 'edges';
 };
+
+/**
+ * `lines` traces the middle of dark lines (cartoons, inked drawings); `edges` traces the
+ * outlines of shapes (photos); `auto` picks `lines` when the image looks like a line drawing.
+ */
+export type TraceMode = 'auto' | 'lines' | 'edges';
 
 export type PhotoOptions = {
   detail: DetailLevel;
   removeBackground: boolean;
   settings: PlotterSettings;
+  /** Defaults to `auto`. */
+  trace?: TraceMode;
 };
 
 /**
- * Photo → pen strokes. With background removal on, the subject is found first and the photo
+ * Photo → pen strokes. Line drawings are traced through the middle of each ink line, photos
+ * along the edges of shapes (`trace`, auto-detected by default). With background removal on, the subject is found first and the photo
  * is cropped to it (plus padding) *before* being resized for tracing, so the subject gets the
  * full trace resolution instead of the share of the frame it happened to occupy.
  */
@@ -64,11 +76,19 @@ export function photoToSketch(image: RgbaImage, options: PhotoOptions): PhotoSke
     (s.paperWidthMm - 2 * s.marginMm) / traced.width,
     (s.paperHeightMm - 2 * s.marginMm) / traced.height
   );
+  const preset = DETAIL_PRESETS[options.detail];
+  const mode = options.trace ?? 'auto';
+  const lineArt = mode === 'edges' ? null : checkLineArt(input);
+  const trace = mode === 'lines' || (mode === 'auto' && lineArt?.isLineArt) ? 'lines' : 'edges';
   return {
-    sketch: imageToSketch(input, DETAIL_PRESETS[options.detail], mmPerPx),
+    sketch:
+      trace === 'lines'
+        ? lineArtToSketch(input, preset, mmPerPx, lineArt!.skeleton)
+        : imageToSketch(input, preset, mmPerPx),
     traced,
     crop,
     removal,
+    trace,
   };
 }
 

@@ -4,8 +4,10 @@ Turn photos and text into pen strokes that a drawing robot / pen plotter can dra
 
 - **Draw → Gallery:** pick one of 12 built-in cartoon line drawings (animals, things, nature);
   each comes with ready-made G-code in [`catalog/`](catalog/README.md).
-- **Draw → Photo:** take or choose a photo; RoboSketch removes the background and traces the
-  subject's outlines (pick **Low / Medium / High** detail).
+- **Draw → Photo:** take or choose a photo or a picture; RoboSketch removes the background and
+  traces it. Line drawings (cartoons, inked sketches) are traced along the middle of each
+  line; photos along the outlines of shapes (detected automatically, switchable under
+  **Trace as**). Pick **Low / Medium / High** detail.
 - **Write:** type a message and pick a single-stroke font (Print, Handwriting, Cursive,
   Calligraphy), size (**Fit width** by default, or Small / Medium / Large / a custom height in
   mm) and alignment; "Natural" adds slight per-letter variation so it looks hand-written.

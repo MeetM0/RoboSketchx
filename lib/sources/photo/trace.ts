@@ -14,8 +14,8 @@ const NEIGHBOURS = [
 
 /**
  * Turns a binary edge map into polylines by walking connected edge pixels.
- * Line endpoints are traced first so open curves come out as a single stroke;
- * whatever remains afterwards are closed loops.
+ * Line endpoints are traced first so open curves come out as a single stroke; what remains
+ * (loops, and lines whose ends were taken by earlier walks) is walked both ways from its start.
  */
 export function traceEdges(edges: Uint8Array, width: number, height: number): Polyline[] {
   const visited = new Uint8Array(edges.length);
@@ -68,7 +68,11 @@ export function traceEdges(edges: Uint8Array, width: number, height: number): Po
         const i = y * width + x;
         if (!edges[i] || visited[i]) continue;
         if (endpointsOnly && neighbourCount(x, y) !== 1) continue;
-        strokes.push(walk(x, y));
+        // A walk that starts mid-line (no free end to start from) runs one way only; walk
+        // the other way from the same start too, so the line isn't cut into pieces.
+        const forward = walk(x, y);
+        const backward = walk(x, y);
+        strokes.push(backward.length > 1 ? [...backward.reverse(), ...forward.slice(1)] : forward);
       }
     }
   }

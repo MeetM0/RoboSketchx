@@ -109,9 +109,15 @@ orders the strokes.
    the background colours from the border with k-means in Lab colour, flood-fills inward,
    cleans the mask). The 1024 px photo is cropped to the subject plus 6 % and resized to
    512 px, so the subject gets the full tracing resolution.
-3. `edges.ts`: Canny edge detection (blur → Sobel → thin → hysteresis), with a minimum
-   contrast so flat, noisy backgrounds stay blank. Edge points are refined to sub-pixel accuracy.
-4. `trace.ts` follows connected edge pixels into chains.
+3. `centerline.ts` decides how to trace (**Trace as**, auto-detected): a **line drawing**
+   (cartoon, inked sketch: thin dark lines on light paper) or a **photo**.
+   - Line drawing: find the ink (pixels clearly darker than the paper; coloured fills and
+     their shading excluded), thin every ink line to its one-pixel centre (Zhang–Suen), and
+     trace that, so each drawn line becomes one pen stroke.
+   - Photo: `edges.ts` runs Canny edge detection (blur → Sobel → thin → hysteresis), with a
+     minimum contrast so flat, noisy backgrounds stay blank, refined to sub-pixel accuracy.
+     Tracing edges on a line drawing would draw both sides of every line.
+4. `trace.ts` follows connected pixels into chains, walking both ways from any start point.
 5. `chains.ts` links broken chains that continue each other, closes loops, drops duplicates,
    and smooths the pixel staircase.
 6. `pipeline.ts` → `imageToSketch`: drops strokes that are too short, simplifies with
