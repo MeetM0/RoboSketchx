@@ -783,7 +783,7 @@ export function inkDistance(
  * bins, smoothed over neighbours). Not the median: in a cartoon with large black fills most of
  * the centre line runs through the fills, which would make the fills the "typical line".
  */
-function typicalHalfWidth(skeleton: Uint8Array, dist: Float32Array): number {
+export function typicalHalfWidth(skeleton: Uint8Array, dist: Float32Array): number {
   const bins: number[] = [];
   for (let i = 0; i < skeleton.length; i++) {
     if (!skeleton[i]) continue;

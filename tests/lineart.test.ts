@@ -351,3 +351,56 @@ test('P4: a dark grey shaded fill is not ink: only its black outline is drawn', 
   assert.equal(inside.length, 0, 'no scribbles in the grey fill');
   assert.ok(points.length > 0.8 * perimeter, 'the outline is drawn');
 });
+
+test('P4: learned model lines are added inside black fills, and a failing model falls back', async () => {
+  // A black block (a black glove on a black arm) with a thin black outline elsewhere: the rules
+  // can only outline the block; the "model" also sees a line across its middle.
+  const block = { x0: 156, y0: 196, x1: 356, y1: 316 };
+  const image = lineArt(
+    512,
+    512,
+    (x, y) =>
+      (x >= block.x0 && x <= block.x1 && y >= block.y0 && y <= block.y1) ||
+      (Math.abs(y - 420) <= 2.5 && x >= 120 && x <= 390)
+  );
+  const options = { detail: 'medium' as const, removeBackground: true, settings: S };
+  // The fake model draws a line across the middle of the black block in the image it gets.
+  const runModel: sk.LineModelRunner = async ({ data, width, height }) => {
+    const grey = new Float32Array(width * height).fill(1);
+    const dark = (x: number, y: number) => data[(y * width + x) * 4] < 100;
+    const rows: number[] = [];
+    for (let y = 0; y < height; y++) {
+      let count = 0;
+      for (let x = 0; x < width; x++) count += dark(x, y) ? 1 : 0;
+      if (count > width / 4) rows.push(y);
+    }
+    const midY = rows[Math.floor(rows.length / 2)];
+    const xs: number[] = [];
+    for (let x = 0; x < width; x++) if (dark(x, midY)) xs.push(x);
+    const pad = Math.round((xs[xs.length - 1] - xs[0]) * 0.2);
+    for (let y = midY - 1; y <= midY + 1; y++) {
+      for (let x = xs[0] + pad; x <= xs[xs.length - 1] - pad; x++) grey[y * width + x] = 0;
+    }
+    return { grey, width, height };
+  };
+  const across = (result: Awaited<ReturnType<typeof sk.photoToSketchWithModel>>) =>
+    densified(result)
+      .flat()
+      .filter(
+        (p) =>
+          p.x > block.x0 + 40 &&
+          p.x < block.x1 - 40 &&
+          Math.abs(p.y - (block.y0 + block.y1) / 2) < 4
+      ).length;
+  const plain = await sk.photoToSketchWithModel(image, options);
+  const withModel = await sk.photoToSketchWithModel(image, options, runModel);
+  const failing = await sk.photoToSketchWithModel(image, options, async () => {
+    throw new Error('offline');
+  });
+  console.log(
+    `  line across the block: ${across(plain)} without the model, ${across(withModel)} with it`
+  );
+  assert.equal(across(plain), 0);
+  assert.ok(across(withModel) > 100, 'the model line inside the black block is drawn');
+  assert.equal(failing.sketch.strokes.length, plain.sketch.strokes.length, 'falls back');
+});

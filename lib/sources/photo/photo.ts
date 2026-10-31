@@ -1,7 +1,15 @@
 import type { DetailLevel, RgbaImage, Sketch } from '../../geometry/types';
 import type { PlotterSettings } from '../../plot/settings';
 import { applyMask, removeBackground, type BackgroundRemoval } from './background';
-import { checkLineArt, inkMask, measureLineArt } from './centerline';
+import {
+  checkLineArt,
+  inkDistance,
+  inkMask,
+  measureLineArt,
+  typicalHalfWidth,
+  type InkKind,
+} from './centerline';
+import { addModelLines, type ModelLines } from './model-lines';
 import { labelRegions } from './morphology';
 import { DETAIL_PRESETS, imageToSketch, lineArtToSketch } from './pipeline';
 
@@ -48,37 +56,94 @@ export type PhotoOptions = {
   trace?: TraceMode;
 };
 
+/** Runs the line-drawing model on an image (see model-lines.ts); resolves to its line image. */
+export type LineModelRunner = (image: RgbaImage) => Promise<ModelLines>;
+
+/** Longest side of the image the line-drawing model sees (what it was trained at). */
+export const LINE_MODEL_SIZE = 512;
+
+type LineDrawingPlan = { crop: CropRect; traced: RgbaImage; kind: InkKind };
+
 /**
  * Photo → pen strokes. Line drawings are traced through the middle of each ink line, photos
- * along the edges of shapes (`trace`, auto-detected by default). With background removal on, the subject is found first and the photo
- * is cropped to it (plus padding) *before* being resized for tracing, so the subject gets the
- * full trace resolution instead of the share of the frame it happened to occupy.
+ * along the edges of shapes (`trace`, auto-detected by default). With background removal on,
+ * the subject is found first and the photo is cropped to it (plus padding) *before* being
+ * resized for tracing, so the subject gets the full trace resolution instead of the share of
+ * the frame it happened to occupy.
  */
 export function photoToSketch(image: RgbaImage, options: PhotoOptions): PhotoSketch {
+  const plan = planLineDrawing(image, options);
+  return plan ? lineDrawingSketch(plan, options) : photoSketch(image, options);
+}
+
+/**
+ * Like `photoToSketch`, and for line drawings also runs the line-drawing model (when given)
+ * and adds the lines it finds that the rules miss. If the model fails, the drawing is traced
+ * without it.
+ */
+export async function photoToSketchWithModel(
+  image: RgbaImage,
+  options: PhotoOptions,
+  runModel?: LineModelRunner
+): Promise<PhotoSketch> {
+  const plan = planLineDrawing(image, options);
+  if (!plan) return photoSketch(image, options);
+  let model: ModelLines | undefined;
+  if (runModel && plan.kind === 'dark') {
+    try {
+      model = await runModel(resizeImage(plan.traced, LINE_MODEL_SIZE));
+    } catch {
+      model = undefined;
+    }
+  }
+  return lineDrawingSketch(plan, options, model);
+}
+
+/**
+ * Line drawings: the paper is the background and every stroke matters, so the crop is all of
+ * the ink rather than a "subject" (which can be one enclosed patch of paper). Null for photos.
+ */
+function planLineDrawing(image: RgbaImage, options: PhotoOptions): LineDrawingPlan | null {
   const mode = options.trace ?? 'auto';
+  if (mode === 'edges') return null;
+  const preview = resizeImage(image, TRACE_SIZE);
+  const k = image.width / preview.width;
+  const previewArt = checkLineArt(preview);
+  if (mode === 'auto' && !previewArt.isLineArt) return null;
+  const kind = previewArt.isLineArt ? previewArt.ink : 'dark';
+  const ink = previewArt.isLineArt ? previewArt.inkMask : inkMask(preview, kind);
+  const { bounds, marks } = drawingBounds(ink, preview.width, preview.height);
+  const crop = padCrop(bounds, k, image);
+  const traced = resizeImage(cropImage(eraseMarks(image, marks, k), crop), LINE_TRACE_SIZE);
+  return { crop, traced, kind };
+}
+
+function lineDrawingSketch(
+  { crop, traced, kind }: LineDrawingPlan,
+  options: PhotoOptions,
+  model?: ModelLines
+): PhotoSketch {
+  const art = measureLineArt(traced, kind, true);
+  let paths = art.paths;
+  if (model) {
+    const { width, height } = traced;
+    const lineHalf = typicalHalfWidth(art.skeleton, inkDistance(art.inkMask, width, height));
+    paths = addModelLines(paths, art.inkMask, model, width, height, lineHalf);
+  }
+  const preset = DETAIL_PRESETS[options.detail];
+  return {
+    sketch: lineArtToSketch(traced, preset, mmPerPxFor(traced, options.settings), paths),
+    traced,
+    crop,
+    removal: null,
+    trace: 'lines',
+  };
+}
+
+function photoSketch(image: RgbaImage, options: PhotoOptions): PhotoSketch {
   const preset = DETAIL_PRESETS[options.detail];
   const preview = resizeImage(image, TRACE_SIZE);
   const k = image.width / preview.width;
-
-  // Line drawings: the paper is the background and every stroke matters, so crop to all of
-  // the ink rather than to a "subject" (which can be one enclosed patch of paper).
-  const previewArt = mode === 'edges' ? null : checkLineArt(preview);
-  if (mode === 'lines' || (mode === 'auto' && previewArt?.isLineArt)) {
-    const kind = previewArt?.isLineArt ? previewArt.ink : 'dark';
-    const ink = previewArt?.isLineArt ? previewArt.inkMask : inkMask(preview, kind);
-    const { bounds, marks } = drawingBounds(ink, preview.width, preview.height);
-    const crop = padCrop(bounds, k, image);
-    const traced = resizeImage(cropImage(eraseMarks(image, marks, k), crop), LINE_TRACE_SIZE);
-    const art = measureLineArt(traced, kind, true);
-    return {
-      sketch: lineArtToSketch(traced, preset, mmPerPxFor(traced, options.settings), art.paths),
-      traced,
-      crop,
-      removal: null,
-      trace: 'lines',
-    };
-  }
-
   let crop: CropRect = { x: 0, y: 0, width: image.width, height: image.height };
   if (options.removeBackground) {
     const found = removeBackground(preview);
