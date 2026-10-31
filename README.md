@@ -7,7 +7,9 @@ Turn photos and text into pen strokes that a drawing robot / pen plotter can dra
 - **Draw → Photo:** take or choose a photo or a picture; RoboSketch removes the background and
   traces it. Line drawings (cartoons, inked sketches) are traced along the middle of each
   line; photos along the outlines of shapes (detected automatically, switchable under
-  **Drawing style**: Single lines / Outlines). Pick **Low / Medium / High** detail.
+  **Drawing style**: Single lines / Outlines). In the browser a small line-drawing model
+  (downloaded on first use) also finds lines drawn black on black. Pick **Low / Medium /
+  High** detail.
 - **Write:** type a message and pick a single-stroke font (Print, Handwriting, Cursive,
   Calligraphy), size (**Fit width** by default, or Small / Medium / Large / a custom height in
   mm) and alignment; "Natural" adds slight per-letter variation so it looks hand-written.

@@ -727,6 +727,10 @@ const BAND_MIN_HALF_WIDTH = 4;
 const JUNCTION_ARM_THICKNESS = 1.6;
 /** A thick short spot with this many lines leaving it is a junction, not a solid shape. */
 const JUNCTION_BRANCHES = 3;
+/** A separate shape whose thickest point is this many line half-widths is a filled emblem... */
+const EMBLEM_BOLDNESS = 2.3;
+/** ...if it is at most this share of the picture. */
+const EMBLEM_MAX_SHARE = 0.01;
 /** A dot fills at least this share of the disc around its centre (an oval eye ~0.55, a dash less). */
 const DOT_MIN_FILL = 0.5;
 /** How far (pixels) solid shapes are grown over adjoining ink to reach their own edge. */
@@ -967,8 +971,13 @@ export function penPaths(
   const isDot = (l: number) =>
     centreLength[l] <= SOLID_MAX_LENGTH * peakHalf[l] &&
     (centreLength[l] < 2 || sizes[l] >= DOT_MIN_FILL * Math.PI * (radius[l] + 0.5) ** 2);
+  // A small separate shape much bolder at its middle than the drawing's lines is a filled
+  // emblem (a bat logo), drawn by its outline even though lines seem to leave its middle; an
+  // asterisk's crossing is at most about twice as thick as its arms.
+  const isEmblem = (l: number) =>
+    sizes[l] <= EMBLEM_MAX_SHARE * ink.length && peakHalf[l] >= EMBLEM_BOLDNESS * lineHalf;
   for (let i = 0; i < ink.length; i++) {
-    if (ink[i] && isDot(labels[i])) solid[i] = 1;
+    if (ink[i] && (isDot(labels[i]) || isEmblem(labels[i]))) solid[i] = 1;
   }
 
   // The discs can fall a pixel short of the ink's edge where it steps; grow the shapes over
@@ -992,11 +1001,12 @@ export function penPaths(
       const i = y * width + x;
       if (!solid[i]) continue;
       paths[i] = 0;
+      const shows = (j: number) => !ink[j];
       const onEdge =
-        (x > 0 && !ink[i - 1]) ||
-        (x < width - 1 && !ink[i + 1]) ||
-        (y > 0 && !ink[i - width]) ||
-        (y < height - 1 && !ink[i + width]);
+        (x > 0 && shows(i - 1)) ||
+        (x < width - 1 && shows(i + 1)) ||
+        (y > 0 && shows(i - width)) ||
+        (y < height - 1 && shows(i + width));
       if (onEdge) paths[i] = outline[i] = 1;
     }
   }

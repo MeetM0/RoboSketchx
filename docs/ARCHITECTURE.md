@@ -137,7 +137,15 @@ orders the strokes.
      ball) are drawn by their outline instead, with lines that run into them joined to that
      outline. The typical line is the most common line thickness, not the average, so large
      black fills don't count as "lines". A thick spot where three or more lines cross (the
-     middle of an asterisk) stays a junction of lines, and a short dash stays a line.
+     middle of an asterisk) stays a junction of lines, and a short dash stays a line. A small
+     separate shape much bolder than the lines (a bat logo) is drawn by its outline.
+   - Learned model lines (web only, `model-lines.ts` + `platform/line-model.web.ts`): rules
+     can't see lines drawn black on black (a glove on a black arm, eyebrows on a black mask).
+     A line-drawing model (Informative Drawings, CVPR 2022, MIT licence, 17 MB ONNX) runs in
+     the browser with ONNX Runtime Web; both are downloaded on first use and cached. Its lines
+     are added only deep inside black fills, where the rules are blind, and away from existing
+     pen paths, so nothing is drawn twice. If it can't load, the rules' result is used. Phones
+     use the rules only for now.
    - Photo: `edges.ts` runs Canny edge detection (blur → Sobel → thin → hysteresis), with a
      minimum contrast so flat, noisy backgrounds stay blank, refined to sub-pixel accuracy.
      Tracing edges on a line drawing would draw both sides of every line.
