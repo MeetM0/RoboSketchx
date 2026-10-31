@@ -22,8 +22,10 @@ export {
   checkLineArt,
   inkDistance,
   inkMask,
+  measureLineArt,
   penPaths,
   thin,
+  type InkKind,
   type LineArtCheck,
 } from './centerline';
 export * from './pipeline';

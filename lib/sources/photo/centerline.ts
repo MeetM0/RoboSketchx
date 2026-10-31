@@ -15,11 +15,17 @@ const MAX_LINE_WIDTH_FRACTION = 0.04;
 const SATURATED_CHROMA = 80;
 
 /**
- * Pixels that are ink: clearly darker than the paper. The threshold follows the paper's
- * brightness (its 90th-percentile luminance), and saturated colours must be very dark, so
- * coloured fills and their shading are not mistaken for lines.
+ * Which pixels count as ink:
+ * - `dark`: clearly darker than the paper, with saturated colours only when very dark, so the
+ *   coloured fills and shading of a cartoon stay out of its black lines;
+ * - `contrast`: anything that clearly stands out from the paper around it, coloured ink and
+ *   faint pencil included, judged against the local paper so uneven light in a photo of a
+ *   drawing doesn't count. Used when a drawing has no dark lines.
  */
-export function inkMask({ data, width, height }: RgbaImage): Uint8Array {
+export type InkKind = 'dark' | 'contrast';
+
+export function inkMask(image: RgbaImage, kind: InkKind = 'dark'): Uint8Array {
+  const { data, width, height } = image;
   const n = width * height;
   const luma = new Uint8Array(n);
   const histogram = new Uint32Array(256);
@@ -38,16 +44,47 @@ export function inkMask({ data, width, height }: RgbaImage): Uint8Array {
       break;
     }
   }
-  const threshold = Math.min(85, Math.max(40, paper * 0.32));
 
   const mask = new Uint8Array(n);
-  for (let i = 0; i < n; i++) {
-    if (luma[i] >= threshold) continue;
-    const p = i * 4;
-    const chroma =
-      Math.max(data[p], data[p + 1], data[p + 2]) - Math.min(data[p], data[p + 1], data[p + 2]);
-    if (chroma > SATURATED_CHROMA && luma[i] >= SATURATED_INK_MAX_LUMA) continue;
-    mask[i] = 1;
+  if (kind === 'dark') {
+    const threshold = Math.min(85, Math.max(40, paper * 0.32));
+    for (let i = 0; i < n; i++) {
+      if (luma[i] >= threshold) continue;
+      const p = i * 4;
+      const chroma =
+        Math.max(data[p], data[p + 1], data[p + 2]) - Math.min(data[p], data[p + 1], data[p + 2]);
+      if (chroma > SATURATED_CHROMA && luma[i] >= SATURATED_INK_MAX_LUMA) continue;
+      mask[i] = 1;
+    }
+  } else {
+    const local = localPaper(
+      luma,
+      width,
+      height,
+      Math.max(6, Math.round(0.03 * Math.max(width, height)))
+    );
+    // The paper's colour: the average of its brightest tenth.
+    let pr = 0;
+    let pg = 0;
+    let pb = 0;
+    let pn = 0;
+    for (let i = 0; i < n; i++) {
+      if (luma[i] < paper) continue;
+      pr += data[i * 4];
+      pg += data[i * 4 + 1];
+      pb += data[i * 4 + 2];
+      pn++;
+    }
+    pr /= pn || 1;
+    pg /= pn || 1;
+    pb /= pn || 1;
+    for (let i = 0; i < n; i++) {
+      const darker = local[i] - luma[i];
+      const p = i * 4;
+      const colour = Math.hypot(data[p] - pr, data[p + 1] - pg, data[p + 2] - pb);
+      if (darker >= Math.max(CONTRAST_INK_MIN_STEP, CONTRAST_INK_FRACTION * local[i])) mask[i] = 1;
+      else if (colour >= COLOUR_INK_DISTANCE && darker >= COLOUR_INK_MIN_STEP) mask[i] = 1;
+    }
   }
   // Drop specks (JPEG noise, dust) and clear the 1-pixel border the thinning needs.
   const { labels, sizes } = labelRegions(mask, width, height, 1);
@@ -57,6 +94,71 @@ export function inkMask({ data, width, height }: RgbaImage): Uint8Array {
   for (let x = 0; x < width; x++) mask[x] = mask[(height - 1) * width + x] = 0;
   for (let y = 0; y < height; y++) mask[y * width] = mask[y * width + width - 1] = 0;
   return mask;
+}
+
+/**
+ * Contrast ink judges against the paper within `paperRadius`, so inside a large dark area only
+ * a band about that wide near its edge stands out: a photo can look like thick lines. Real
+ * drawn lines are well under the window; these limits keep such photos out.
+ */
+const CONTRAST_MAX_WIDTH_SHARE = 0.5;
+const CONTRAST_MAX_INK_FRACTION = 0.15;
+const paperRadius = (width: number, height: number) =>
+  Math.max(6, Math.round(0.03 * Math.max(width, height)));
+
+/** Contrast ink: at least this much darker than the local paper (grey levels)... */
+const CONTRAST_INK_MIN_STEP = 25;
+/** ...and at least this share of the local paper's brightness. */
+const CONTRAST_INK_FRACTION = 0.28;
+/** Or this far from the paper's colour (RGB distance), e.g. a yellow crayon on white. */
+const COLOUR_INK_DISTANCE = 100;
+const COLOUR_INK_MIN_STEP = 15;
+
+/**
+ * The paper's brightness around each pixel: the brightest (lightly smoothed) value within
+ * `radius`, which ink lines narrower than the window don't affect but shadows and lighting
+ * gradients do.
+ */
+function localPaper(luma: Uint8Array, width: number, height: number, radius: number): Uint8Array {
+  // 3x3 box blur first, so single bright noise pixels don't set the paper level.
+  const smooth = new Uint8Array(luma.length);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let sum = 0;
+      let k = 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+          sum += luma[ny * width + nx];
+          k++;
+        }
+      }
+      smooth[y * width + x] = sum / k;
+    }
+  }
+  const rows = new Uint8Array(luma.length);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let m = 0;
+      for (let k = Math.max(0, x - radius); k <= Math.min(width - 1, x + radius); k++) {
+        m = Math.max(m, smooth[y * width + k]);
+      }
+      rows[y * width + x] = m;
+    }
+  }
+  const out = new Uint8Array(luma.length);
+  for (let x = 0; x < width; x++) {
+    for (let y = 0; y < height; y++) {
+      let m = 0;
+      for (let k = Math.max(0, y - radius); k <= Math.min(height - 1, y + radius); k++) {
+        m = Math.max(m, rows[k * width + x]);
+      }
+      out[y * width + x] = m;
+    }
+  }
+  return out;
 }
 
 /**
@@ -109,12 +211,14 @@ export function thin(mask: Uint8Array, width: number, height: number): Uint8Arra
 
 export type LineArtCheck = {
   isLineArt: boolean;
+  /** Which ink definition found the drawing. */
+  ink: InkKind;
   /** Share of the image that is ink (0–1). */
   inkFraction: number;
   /** Average ink line width in pixels (ink area / centre-line length). */
   lineWidthPx: number;
   /** Ink mask and its one-pixel centre lines. */
-  ink: Uint8Array;
+  inkMask: Uint8Array;
   skeleton: Uint8Array;
   /** What the pen should follow: centre lines of lines, outlines of solid shapes. */
   paths: Uint8Array;
@@ -126,8 +230,21 @@ export type LineArtCheck = {
  * edge tracing.
  */
 export function checkLineArt(image: RgbaImage): LineArtCheck {
+  // Dark ink first (black-lined drawings, coloured or not); then any clearly visible ink, for
+  // drawings in coloured marker, crayon or pencil.
+  const dark = measureLineArt(image, 'dark');
+  if (dark.isLineArt) return dark;
+  const contrast = measureLineArt(image, 'contrast');
+  return contrast.isLineArt ? contrast : dark;
+}
+
+/**
+ * Line-drawing measures for one ink definition. `force` computes the pen paths even when the
+ * image doesn't pass as a line drawing (the person chose "Line drawing").
+ */
+export function measureLineArt(image: RgbaImage, kind: InkKind, force = false): LineArtCheck {
   const { width, height } = image;
-  const ink = inkMask(image);
+  const ink = inkMask(image, kind);
   const skeleton = thin(ink, width, height);
   let inkPixels = 0;
   let skeletonPixels = 0;
@@ -139,10 +256,11 @@ export function checkLineArt(image: RgbaImage): LineArtCheck {
   const lineWidthPx = skeletonPixels ? inkPixels / skeletonPixels : 0;
   const isLineArt =
     skeletonPixels >= (width + height) / 2 &&
-    inkFraction <= 0.3 &&
-    lineWidthPx <= Math.max(3, MAX_LINE_WIDTH_FRACTION * Math.max(width, height));
-  const paths = isLineArt ? penPaths(ink, skeleton, width, height) : skeleton;
-  return { isLineArt, inkFraction, lineWidthPx, ink, skeleton, paths };
+    inkFraction <= (kind === 'dark' ? 0.3 : CONTRAST_MAX_INK_FRACTION) &&
+    lineWidthPx <= Math.max(3, MAX_LINE_WIDTH_FRACTION * Math.max(width, height)) &&
+    (kind === 'dark' || lineWidthPx <= CONTRAST_MAX_WIDTH_SHARE * paperRadius(width, height));
+  const paths = isLineArt || force ? penPaths(ink, skeleton, width, height) : skeleton;
+  return { isLineArt, ink: kind, inkFraction, lineWidthPx, inkMask: ink, skeleton, paths };
 }
 
 /** Thickness factor over the median line's half-width at which ink counts as a solid shape. */

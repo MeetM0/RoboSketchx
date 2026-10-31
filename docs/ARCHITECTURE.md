@@ -105,17 +105,25 @@ orders the strokes.
 
 1. `platform/prepare-photo.ts` shrinks the picked photo to 1024 px and re-encodes it as JPEG;
    `decode.ts` turns that into RGBA pixels.
-2. `photo.ts` → `photoToSketch`: on a 512 px copy, `background.ts` finds the subject (learns
-   the background colours from the border with k-means in Lab colour, flood-fills inward,
-   cleans the mask). The 1024 px photo is cropped to the subject plus 6 % and resized to
-   512 px, so the subject gets the full tracing resolution.
-3. `centerline.ts` decides how to trace (**Trace as**, auto-detected): a **line drawing**
-   (cartoon, inked sketch: thin dark lines on light paper) or a **photo**.
-   - Line drawing: find the ink (pixels clearly darker than the paper; coloured fills and
-     their shading excluded), thin every ink line to its one-pixel centre (Zhang–Suen), and
-     trace that, so each drawn line becomes one pen stroke. Solid shapes (eye dots, a nose,
-     a filled ear: thick everywhere and short for their thickness) are drawn by their outline
-     instead.
+2. `photo.ts` → `photoToSketch` looks at a 512 px copy. `centerline.ts` decides how to trace
+   it (**Trace as**, auto-detected): a **line drawing** (cartoon, doodle, inked or pencil
+   sketch: thin lines on paper) or a **photo**.
+3. The 1024 px picture is cropped and resized to 512 px, so the drawing gets the full tracing
+   resolution:
+   - Line drawing: cropped to all of the ink plus 6 %. Small marks at the picture's edge (a
+     watermark or logo in a corner, a scanner border) are left out and painted over.
+   - Photo: `background.ts` finds the subject (learns the background colours from the border
+     with k-means in Lab colour, flood-fills inward, cleans the mask), and the picture is
+     cropped to the subject plus 6 %.
+
+   Then each is traced:
+   - Line drawing: find the ink, thin every ink line to its one-pixel centre (Zhang–Suen),
+     and trace that, so each drawn line becomes one pen stroke. Ink is pixels clearly darker
+     than the paper (black and dark-coloured pens); if that finds no drawing, pixels clearly
+     darker than the paper *around them* (light coloured markers, pencil, a photo of paper
+     with uneven light), as long as the lines stay thin. Coloured fills and their shading are
+     not ink. Solid shapes (eye dots, a nose, a filled ear: thick everywhere and short for
+     their thickness) are drawn by their outline instead.
    - Photo: `edges.ts` runs Canny edge detection (blur → Sobel → thin → hysteresis), with a
      minimum contrast so flat, noisy backgrounds stay blank, refined to sub-pixel accuracy.
      Tracing edges on a line drawing would draw both sides of every line.
