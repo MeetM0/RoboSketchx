@@ -19,11 +19,12 @@ import type { DetailLevel, RgbaImage } from '@/lib/geometry';
 import {
   decodeJpegBase64,
   PHOTO_WORK_SIZE,
-  photoToSketch,
+  photoToSketchWithModel,
   type BackgroundRemoval,
   type PhotoSketch,
   type TraceMode,
 } from '@/lib/sources/photo';
+import { getLineModel } from '@/platform/line-model';
 import { pickImage, type PickedImage } from '@/platform/pick-image';
 import { preparePhoto } from '@/platform/prepare-photo';
 import { usePlotterSettings } from '@/state/plotter-settings';
@@ -86,12 +87,16 @@ export function PhotoMode({ toolbar }: { toolbar: ReactNode }) {
 
   async function generate(job: number, image: RgbaImage, options: Settings) {
     await nextFrame();
-    const next = photoToSketch(image, {
-      detail: options.detail,
-      removeBackground: options.background === 'remove',
-      trace: options.trace,
-      settings,
-    });
+    const next = await photoToSketchWithModel(
+      image,
+      {
+        detail: options.detail,
+        removeBackground: options.background === 'remove',
+        trace: options.trace,
+        settings,
+      },
+      getLineModel()
+    );
     if (job === jobRef.current) setResult(next);
   }
 

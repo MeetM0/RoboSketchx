@@ -16,6 +16,16 @@ const MAX_LINE_WIDTH_FRACTION = 0.04;
 /** Dark pixels this colourful (max − min channels, and that share of the brightest) are fills. */
 const DARK_FILL_CHROMA = 40;
 const DARK_FILL_SATURATION = 0.5;
+/** Grey fills are grown up to this many grey levels above the ink threshold... */
+const GREY_FILL_MARGIN = 50;
+/** ...as areas within this many grey levels of where they started (so grey never joins black). */
+const GREY_FILL_TOLERANCE = 18;
+/** Grey fill pixels have at most this much colour (max − min channel). */
+const GREY_FILL_MAX_CHROMA = 50;
+/** Grey fills are at least this bright (black fills and outlines stay ink)... */
+const GREY_FILL_MIN_LUMA = 30;
+/** ...and is at least this share of the longest side across (half-width): wider than any line. */
+const GREY_FILL_MIN_HALF_SHARE = 0.012;
 /** RGB distance within which pixels belong to the same flat-colour region. */
 const COLOUR_REGION_TOLERANCE = 48;
 /** A coloured line's half-width: at least this many pixels and this share of the black lines'... */
@@ -97,6 +107,7 @@ export function inkMask(image: RgbaImage, kind: InkKind = 'dark'): Uint8Array {
       if (isFill) continue;
       mask[i] = 1;
     }
+    removeGreyFills(mask, luma, data, width, height, threshold);
   } else {
     const local = localPaper(
       luma,
@@ -145,6 +156,88 @@ export function inkMask(image: RgbaImage, kind: InkKind = 'dark'): Uint8Array {
   for (let x = 0; x < width; x++) mask[x] = mask[(height - 1) * width + x] = 0;
   for (let y = 0; y < height; y++) mask[y * width] = mask[y * width + width - 1] = 0;
   return mask;
+}
+
+/**
+ * Dark grey fills (a grey suit, a shaded grey object) straddle the ink threshold: their darker
+ * parts would be ink and their lighter parts not, so they'd be traced as ragged patches. Grows
+ * areas of similar brightness and takes those that are wide and, on average, grey rather than
+ * black out of the ink; their black outlines stay.
+ */
+function removeGreyFills(
+  mask: Uint8Array,
+  luma: Uint8Array,
+  data: Uint8Array,
+  width: number,
+  height: number,
+  threshold: number
+) {
+  const n = width * height;
+  const limit = threshold + GREY_FILL_MARGIN;
+  // Grey: little colour. Dark coloured pixels (dark green needles, a brown basket) are handled
+  // by the colour rules and must not join a grey area of similar brightness.
+  const grey = new Uint8Array(n);
+  for (let i = 0; i < n; i++) {
+    const p = i * 4;
+    const chroma =
+      Math.max(data[p], data[p + 1], data[p + 2]) - Math.min(data[p], data[p + 1], data[p + 2]);
+    grey[i] =
+      luma[i] >= GREY_FILL_MIN_LUMA && luma[i] < limit && chroma <= GREY_FILL_MAX_CHROMA ? 1 : 0;
+  }
+  const region = new Int32Array(n).fill(-1);
+  const members: number[][] = [];
+  for (let seed = 0; seed < n; seed++) {
+    // Started only from clearly grey pixels, and never growing into black (below
+    // GREY_FILL_MIN_LUMA), so an area can't take in the black outline around it.
+    if (region[seed] >= 0 || !grey[seed]) continue;
+    if (luma[seed] < GREY_FILL_MIN_LUMA + GREY_FILL_TOLERANCE) continue;
+    const id = members.length;
+    const list = [seed];
+    region[seed] = id;
+    for (let k = 0; k < list.length; k++) {
+      const i = list[k];
+      const x = i % width;
+      for (const j of [i - width, i + width, x > 0 ? i - 1 : -1, x < width - 1 ? i + 1 : -1]) {
+        if (j < 0 || j >= n || region[j] >= 0 || !grey[j]) continue;
+        if (Math.abs(luma[j] - luma[seed]) > GREY_FILL_TOLERANCE) continue;
+        region[j] = id;
+        list.push(j);
+      }
+    }
+    members.push(list);
+  }
+  const minHalf = Math.max(4, GREY_FILL_MIN_HALF_SHARE * Math.max(width, height));
+  const area = new Uint8Array(n);
+  for (const list of members) {
+    if (list.length < Math.PI * minHalf * minHalf) continue;
+    // Wide: some point at least minHalf from the area's edge. Checked on the area's bounding
+    // box only, so each area costs its own size.
+    let x0 = width;
+    let y0 = height;
+    let x1 = 0;
+    let y1 = 0;
+    for (const i of list) {
+      const x = i % width;
+      const y = (i - x) / width;
+      x0 = Math.min(x0, x);
+      x1 = Math.max(x1, x);
+      y0 = Math.min(y0, y);
+      y1 = Math.max(y1, y);
+    }
+    const w = x1 - x0 + 1;
+    const h = y1 - y0 + 1;
+    const local = new Uint8Array(w * h);
+    for (const i of list) {
+      const x = i % width;
+      local[((i - x) / width - y0) * w + x - x0] = 1;
+    }
+    const dist = inkDistance(local, w, h);
+    let peak = 0;
+    for (let k = 0; k < dist.length; k++) peak = Math.max(peak, dist[k]);
+    if (peak < minHalf) continue;
+    for (const i of list) area[i] = 1;
+  }
+  for (let i = 0; i < n; i++) if (area[i]) mask[i] = 0;
 }
 
 /**
@@ -630,8 +723,14 @@ const BAND_THICKNESS = 3;
 const BAND_MAX_SHARE = 0.03;
 /** ...and at least this thick (pixels), so drawings with hairlines don't outline ordinary lines. */
 const BAND_MIN_HALF_WIDTH = 4;
+/** Lines leaving a junction are at most this many typical half-widths thick. */
+const JUNCTION_ARM_THICKNESS = 1.6;
 /** A thick short spot with this many lines leaving it is a junction, not a solid shape. */
 const JUNCTION_BRANCHES = 3;
+/** A separate shape whose thickest point is this many line half-widths is a filled emblem... */
+const EMBLEM_BOLDNESS = 2.3;
+/** ...if it is at most this share of the picture. */
+const EMBLEM_MAX_SHARE = 0.01;
 /** A dot fills at least this share of the disc around its centre (an oval eye ~0.55, a dash less). */
 const DOT_MIN_FILL = 0.5;
 /** How far (pixels) solid shapes are grown over adjoining ink to reach their own edge. */
@@ -688,7 +787,7 @@ export function inkDistance(
  * bins, smoothed over neighbours). Not the median: in a cartoon with large black fills most of
  * the centre line runs through the fills, which would make the fills the "typical line".
  */
-function typicalHalfWidth(skeleton: Uint8Array, dist: Float32Array): number {
+export function typicalHalfWidth(skeleton: Uint8Array, dist: Float32Array): number {
   const bins: number[] = [];
   for (let i = 0; i < skeleton.length; i++) {
     if (!skeleton[i]) continue;
@@ -722,6 +821,10 @@ export function penPaths(
 ): Uint8Array {
   const dist = inkDistance(ink, width, height);
   const lineHalf = typicalHalfWidth(skeleton, dist);
+  // Centre-line pixels of ordinary lines: the arms of a crossing are these, the thick wings of
+  // a filled shape (a bat logo) are not.
+  const isLineSkeleton = (i: number) =>
+    skeleton[i] === 1 && dist[i] <= JUNCTION_ARM_THICKNESS * lineHalf + 1;
   const thick = Math.max(2.5, SOLID_THICKNESS * lineHalf);
 
   const paths = skeleton.slice();
@@ -800,7 +903,8 @@ export function penPaths(
     // too, but it is a junction: keep the lines running through it.
     const id = shapeId;
     const inShape = (i: number) => mark[i] === id;
-    if (branchesLeaving(shape, inShape, skeleton, width, height) >= JUNCTION_BRANCHES) continue;
+    if (branchesLeaving(shape, inShape, isLineSkeleton, width, height) >= JUNCTION_BRANCHES)
+      continue;
     for (const j of shape) solid[j] = 1;
   }
 
@@ -830,7 +934,10 @@ export function penPaths(
     const small = part.length <= Math.PI * (2 * band) ** 2;
     const label = parts.labels[part[0]];
     const inPart = (i: number) => opened[i] === 1 && parts.labels[i] === label;
-    if (small && branchesLeaving(part, inPart, skeleton, width, height) >= JUNCTION_BRANCHES) {
+    if (
+      small &&
+      branchesLeaving(part, inPart, isLineSkeleton, width, height) >= JUNCTION_BRANCHES
+    ) {
       continue;
     }
     for (const i of part) solid[i] = 1;
@@ -864,8 +971,13 @@ export function penPaths(
   const isDot = (l: number) =>
     centreLength[l] <= SOLID_MAX_LENGTH * peakHalf[l] &&
     (centreLength[l] < 2 || sizes[l] >= DOT_MIN_FILL * Math.PI * (radius[l] + 0.5) ** 2);
+  // A small separate shape much bolder at its middle than the drawing's lines is a filled
+  // emblem (a bat logo), drawn by its outline even though lines seem to leave its middle; an
+  // asterisk's crossing is at most about twice as thick as its arms.
+  const isEmblem = (l: number) =>
+    sizes[l] <= EMBLEM_MAX_SHARE * ink.length && peakHalf[l] >= EMBLEM_BOLDNESS * lineHalf;
   for (let i = 0; i < ink.length; i++) {
-    if (ink[i] && isDot(labels[i])) solid[i] = 1;
+    if (ink[i] && (isDot(labels[i]) || isEmblem(labels[i]))) solid[i] = 1;
   }
 
   // The discs can fall a pixel short of the ink's edge where it steps; grow the shapes over
@@ -889,11 +1001,12 @@ export function penPaths(
       const i = y * width + x;
       if (!solid[i]) continue;
       paths[i] = 0;
+      const shows = (j: number) => !ink[j];
       const onEdge =
-        (x > 0 && !ink[i - 1]) ||
-        (x < width - 1 && !ink[i + 1]) ||
-        (y > 0 && !ink[i - width]) ||
-        (y < height - 1 && !ink[i + width]);
+        (x > 0 && shows(i - 1)) ||
+        (x < width - 1 && shows(i + 1)) ||
+        (y > 0 && shows(i - width)) ||
+        (y < height - 1 && shows(i + width));
       if (onEdge) paths[i] = outline[i] = 1;
     }
   }
@@ -941,13 +1054,13 @@ export function penPaths(
 }
 
 /**
- * How many centre lines leave a shape: skeleton pixels just outside it, grouped into
+ * How many lines leave a shape: centre-line pixels (`onLine`) just outside it, grouped into
  * 8-connected runs.
  */
 function branchesLeaving(
   shape: number[],
   inShape: (i: number) => boolean,
-  skeleton: Uint8Array,
+  onLine: (i: number) => boolean,
   width: number,
   height: number
 ): number {
@@ -961,7 +1074,7 @@ function branchesLeaving(
         const ny = y + dy;
         if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
         const n = ny * width + nx;
-        if (skeleton[n] && !inShape(n)) exits.add(n);
+        if (onLine(n) && !inShape(n)) exits.add(n);
       }
     }
   }
