@@ -13,6 +13,8 @@ import {
   diskScene,
   DOODLE,
   FILLED,
+  GREY_SUIT,
+  greySuit,
   filledCartoon,
   inkedCartoon,
   lineArt,
@@ -333,4 +335,19 @@ test('P4: lines drawn in a colour (brown window bars, a blue halo) are traced to
   assert.equal(result.trace, 'lines');
   assert.ok(onBars > 0.8 * barsLength, 'the brown cross is drawn along its middle');
   assert.ok(onHalo > 0.8 * 2 * Math.PI * halo.r, 'the blue halo is drawn');
+});
+
+test('P4: a dark grey shaded fill is not ink: only its black outline is drawn', () => {
+  const result = run(greySuit());
+  const { x0, y0, x1, y1, outline } = GREY_SUIT;
+  const points = samples(result);
+  const m = outline + 8;
+  const inside = points.filter((p) => p.x > x0 + m && p.x < x1 - m && p.y > y0 + m && p.y < y1 - m);
+  const perimeter = 2 * (x1 - x0 + (y1 - y0));
+  console.log(
+    `  ${inside.length} samples inside the fill, ${points.length} in all (outline ~${perimeter})`
+  );
+  assert.equal(result.trace, 'lines');
+  assert.equal(inside.length, 0, 'no scribbles in the grey fill');
+  assert.ok(points.length > 0.8 * perimeter, 'the outline is drawn');
 });

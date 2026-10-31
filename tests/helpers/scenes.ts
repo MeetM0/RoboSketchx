@@ -237,3 +237,23 @@ export function colouredLines(): RgbaImage {
     })
   );
 }
+
+/**
+ * A cartoon figure in a dark grey suit: a 6 px black outline around a 200 × 260 box filled
+ * with grey shading from luma 40 to 75 (straddling the ink threshold), on cream paper.
+ */
+export const GREY_SUIT = { x0: 156, y0: 126, x1: 356, y1: 386, outline: 6 };
+export function greySuit(): RgbaImage {
+  const { x0, y0, x1, y1, outline } = GREY_SUIT;
+  return jpegRoundTrip(
+    canvas(512, 512, (x, y) => {
+      const inside = x >= x0 && x <= x1 && y >= y0 && y <= y1;
+      if (!inside) return [250, 246, 205];
+      if (x < x0 + outline || x > x1 - outline || y < y0 + outline || y > y1 - outline) {
+        return [12, 12, 14];
+      }
+      const v = 40 + (35 * (x - x0)) / (x1 - x0);
+      return [v, v, v + 4];
+    })
+  );
+}
