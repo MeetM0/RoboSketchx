@@ -103,13 +103,14 @@ orders the strokes.
 
 **Photo** (`lib/sources/photo`). Runs entirely on the phone, in this order:
 
-1. `platform/prepare-photo.ts` shrinks the picked photo to 1024 px and re-encodes it as JPEG;
+1. `platform/prepare-photo.ts` shrinks the picked photo to 2048 px and re-encodes it as JPEG;
    `decode.ts` turns that into RGBA pixels.
 2. `photo.ts` → `photoToSketch` looks at a 512 px copy. `centerline.ts` decides how to trace
-   it (**Trace as**, auto-detected): a **line drawing** (cartoon, doodle, inked or pencil
-   sketch: thin lines on paper) or a **photo**.
-3. The 1024 px picture is cropped and resized to 512 px, so the drawing gets the full tracing
-   resolution:
+   it (**Drawing style**, auto-detected): *Single lines* for a **line drawing** (cartoon,
+   doodle, inked or pencil sketch: thin lines on paper), *Outlines* for a **photo**.
+3. The 2048 px picture is cropped, so the drawing gets the full tracing resolution even when
+   it is small in a large picture, and resized for tracing: 1024 px for a line drawing (thin
+   lines must stay a few pixels wide), 512 px for a photo.
    - Line drawing: cropped to all of the ink plus 6 %. Small marks at the picture's edge (a
      watermark or logo in a corner, a scanner border) are left out and painted over.
    - Photo: `background.ts` finds the subject (learns the background colours from the border
@@ -123,7 +124,9 @@ orders the strokes.
      darker than the paper *around them* (light coloured markers, pencil, a photo of paper
      with uneven light), as long as the lines stay thin. Coloured fills and their shading are
      not ink. Solid shapes (eye dots, a nose, a filled ear: thick everywhere and short for
-     their thickness) are drawn by their outline instead.
+     their thickness) and parts at least 3× as thick as the drawing's typical line (a heavy
+     band around an eye) are drawn by their outline instead, with lines that run into them
+     joined to that outline.
    - Photo: `edges.ts` runs Canny edge detection (blur → Sobel → thin → hysteresis), with a
      minimum contrast so flat, noisy backgrounds stay blank, refined to sub-pixel accuracy.
      Tracing edges on a line drawing would draw both sides of every line.

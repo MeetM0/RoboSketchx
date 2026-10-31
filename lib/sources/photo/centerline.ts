@@ -7,6 +7,8 @@ import { labelRegions } from './morphology';
 
 /** Ink components smaller than this (pixels) are specks, not lines. */
 const MIN_INK_PIXELS = 6;
+/** Holes in the ink up to this share of the image's longest side across are filled. */
+const PINHOLE_SIZE = 0.006;
 /** Saturated colours count as ink only when this dark (keeps dark shading out of the lines). */
 const SATURATED_INK_MAX_LUMA = 50;
 /** Lines wider than this share of the image's longest side are areas, not lines. */
@@ -90,6 +92,16 @@ export function inkMask(image: RgbaImage, kind: InkKind = 'dark'): Uint8Array {
   const { labels, sizes } = labelRegions(mask, width, height, 1);
   for (let i = 0; i < n; i++) {
     if (mask[i] && sizes[labels[i]] < MIN_INK_PIXELS) mask[i] = 0;
+  }
+  // Fill pinholes in the ink (texture or glare in a black area), which would each be drawn
+  // as a tiny loop.
+  const paperMask = new Uint8Array(n);
+  for (let i = 0; i < n; i++) paperMask[i] = mask[i] ? 0 : 1;
+  const holes = labelRegions(paperMask, width, height, 1);
+  const maxHole = Math.max(4, (PINHOLE_SIZE * Math.max(width, height)) ** 2);
+  for (let i = 0; i < n; i++) {
+    const l = holes.labels[i];
+    if (paperMask[i] && !holes.touchesBorder[l] && holes.sizes[l] <= maxHole) mask[i] = 1;
   }
   for (let x = 0; x < width; x++) mask[x] = mask[(height - 1) * width + x] = 0;
   for (let y = 0; y < height; y++) mask[y * width] = mask[y * width + width - 1] = 0;
@@ -267,6 +279,12 @@ export function measureLineArt(image: RgbaImage, kind: InkKind, force = false): 
 const SOLID_THICKNESS = 1.8;
 /** A solid shape's thick core is at most this many peak half-widths long (else a bold line). */
 const SOLID_MAX_LENGTH = 6;
+/** Ink at least this many median half-widths thick is drawn by its outline, whatever its length. */
+const BAND_THICKNESS = 3;
+/** ...and at least this thick (pixels), so drawings with hairlines don't outline ordinary lines. */
+const BAND_MIN_HALF_WIDTH = 4;
+/** How far (pixels) solid shapes are grown over adjoining ink to reach their own edge. */
+const SOLID_GROW_PX = 2;
 
 /**
  * Chamfer (3-4) distance from each ink pixel to the nearest paper pixel, in pixels: half the
@@ -376,6 +394,23 @@ export function penPaths(
     }
   }
 
+  // Parts far thicker than the drawing's lines (a heavy brush band around an eye, a filled
+  // patch) are drawn by their outline however long they are: their centre line alone would
+  // lose the shape. Bold lines stay well under this.
+  const band = Math.max(BAND_MIN_HALF_WIDTH, BAND_THICKNESS * medianHalf);
+  for (let i = 0; i < ink.length; i++) {
+    if (!skeleton[i] || dist[i] < band) continue;
+    const cx = i % width;
+    const cy = (i - cx) / width;
+    const r = Math.ceil(dist[i]) + 1;
+    for (let y = Math.max(0, cy - r); y <= Math.min(height - 1, cy + r); y++) {
+      for (let x = Math.max(0, cx - r); x <= Math.min(width - 1, cx + r); x++) {
+        const j = y * width + x;
+        if (ink[j] && (x - cx) ** 2 + (y - cy) ** 2 <= r * r) solid[j] = 1;
+      }
+    }
+  }
+
   // A separate ink shape that is short for its own thickness is a dot, however thin (a small
   // eye): its centre line would be a dash too short to draw, or erased by the thinning.
   const { labels, sizes } = labelRegions(ink, width, height, 1);
@@ -391,7 +426,22 @@ export function penPaths(
     if (ink[i] && centreLength[l] <= SOLID_MAX_LENGTH * peakHalf[l]) solid[i] = 1;
   }
 
+  // The discs can fall a pixel short of the ink's edge where it steps; grow the shapes over
+  // the ink so their outline has no holes.
+  for (let pass = 0; pass < SOLID_GROW_PX; pass++) {
+    const grown = solid.slice();
+    for (let y = 1; y < height - 1; y++) {
+      for (let x = 1; x < width - 1; x++) {
+        const i = y * width + x;
+        if (!ink[i] || solid[i]) continue;
+        if (solid[i - 1] || solid[i + 1] || solid[i - width] || solid[i + width]) grown[i] = 1;
+      }
+    }
+    solid.set(grown);
+  }
+
   // Inside solid shapes: drop the centre lines and draw the edge against the paper instead.
+  const outline = new Uint8Array(ink.length);
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const i = y * width + x;
@@ -402,7 +452,47 @@ export function penPaths(
         (x < width - 1 && !ink[i + 1]) ||
         (y > 0 && !ink[i - width]) ||
         (y < height - 1 && !ink[i + width]);
-      if (onEdge) paths[i] = 1;
+      if (onEdge) paths[i] = outline[i] = 1;
+    }
+  }
+
+  // A line running into a solid shape now stops at the shape, about half a line width short
+  // of its outline. Bridge each such cut to the nearest outline pixel so the join is drawn.
+  const reach = Math.ceil(2 * medianHalf) + SOLID_GROW_PX + 1;
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      const i = y * width + x;
+      if (!paths[i] || solid[i] || outline[i]) continue;
+      let cut = false;
+      for (let dy = -1; dy <= 1 && !cut; dy++) {
+        for (let dx = -1; dx <= 1; dx++)
+          if (skeleton[i + dy * width + dx] && solid[i + dy * width + dx]) cut = true;
+      }
+      if (!cut) continue;
+      let best = -1;
+      let bestDistance = Infinity;
+      for (let dy = -reach; dy <= reach; dy++) {
+        for (let dx = -reach; dx <= reach; dx++) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= width || ny >= height || !outline[ny * width + nx])
+            continue;
+          const d = Math.hypot(dx, dy);
+          if (d < bestDistance) {
+            bestDistance = d;
+            best = ny * width + nx;
+          }
+        }
+      }
+      if (best < 0) continue;
+      const bx = best % width;
+      const by = (best - bx) / width;
+      const steps = Math.max(Math.abs(bx - x), Math.abs(by - y));
+      for (let k = 1; k < steps; k++) {
+        paths[
+          Math.round(y + ((by - y) * k) / steps) * width + Math.round(x + ((bx - x) * k) / steps)
+        ] = 1;
+      }
     }
   }
   return paths;

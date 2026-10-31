@@ -42,8 +42,8 @@ const BACKGROUND_OPTIONS = [
 type BackgroundMode = (typeof BACKGROUND_OPTIONS)[number]['value'];
 
 const TRACE_OPTIONS = [
-  { value: 'lines', label: 'Line drawing' },
-  { value: 'edges', label: 'Photo' },
+  { value: 'lines', label: 'Single lines' },
+  { value: 'edges', label: 'Outlines' },
 ] as const;
 
 type Settings = { detail: DetailLevel; background: BackgroundMode; trace: TraceMode };
@@ -275,13 +275,13 @@ export function PhotoMode({ toolbar }: { toolbar: ReactNode }) {
             )}
           </Section>
           <Section
-            title="Trace as"
+            title="Drawing style"
             footer={
               (trace === 'auto' ? 'Picked automatically. ' : '') +
-              'Line drawing follows the middle of each dark line, for cartoons and sketches. Photo traces the outlines of shapes.'
+              'Single lines draws each line of a cartoon or sketch once, along its middle. Outlines draws around the edges of every shape, best for photos.'
             }>
             <Segmented
-              label="Trace as"
+              label="Drawing style"
               options={TRACE_OPTIONS}
               value={trace === 'auto' ? (result?.trace ?? 'lines') : trace}
               onChange={changeTrace}
