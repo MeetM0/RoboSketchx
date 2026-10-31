@@ -107,7 +107,10 @@ orders the strokes.
    `decode.ts` turns that into RGBA pixels.
 2. `photo.ts` → `photoToSketch` looks at a 512 px copy. `centerline.ts` decides how to trace
    it (**Drawing style**, auto-detected): *Single lines* for a **line drawing** (cartoon,
-   doodle, inked or pencil sketch: thin lines on paper), *Outlines* for a **photo**.
+   doodle, clip art, inked or pencil sketch), *Outlines* for a **photo**. Drawn artwork is
+   mostly flat colour (80–95 % of pixels have a near-uniform neighbourhood) while photos are
+   textured everywhere (5–60 %); a pencil or marker drawing photographed on paper is
+   recognised instead by thin lines on mostly bare paper.
 3. The 2048 px picture is cropped, so the drawing gets the full tracing resolution even when
    it is small in a large picture, and resized for tracing: 1024 px for a line drawing (thin
    lines must stay a few pixels wide), 512 px for a photo.
@@ -118,15 +121,22 @@ orders the strokes.
      cropped to the subject plus 6 %.
 
    Then each is traced:
-   - Line drawing: find the ink, thin every ink line to its one-pixel centre (Zhang–Suen),
+   - Line drawing: find the ink, thin every ink line to its one-pixel centre (Zhang–Suen,
+     with Lü & Wang's fix so diagonal lines aren't erased),
      and trace that, so each drawn line becomes one pen stroke. Ink is pixels clearly darker
      than the paper (black and dark-coloured pens); if that finds no drawing, pixels clearly
      darker than the paper *around them* (light coloured markers, pencil, a photo of paper
      with uneven light), as long as the lines stay thin. Coloured fills and their shading are
-     not ink. Solid shapes (eye dots, a nose, a filled ear: thick everywhere and short for
-     their thickness) and parts at least 3× as thick as the drawing's typical line (a heavy
-     band around an eye) are drawn by their outline instead, with lines that run into them
-     joined to that outline.
+     not ink, dark ones (navy, maroon) included. Once a picture is known to be a drawing,
+     lines drawn in other colours (a brown window bar, a blue halo, white ribs on blue) are
+     added: areas of one flat colour, even in width, about as thin as the black lines, and
+     not squeezed between black lines or other such strips. Solid shapes (eye dots, a nose, a filled
+     ear: thick everywhere, short and round) and parts at least 3× as thick as the drawing's
+     typical line or 3 % of the picture (a heavy band around an eye, a black cowl, a pool
+     ball) are drawn by their outline instead, with lines that run into them joined to that
+     outline. The typical line is the most common line thickness, not the average, so large
+     black fills don't count as "lines". A thick spot where three or more lines cross (the
+     middle of an asterisk) stays a junction of lines, and a short dash stays a line.
    - Photo: `edges.ts` runs Canny edge detection (blur → Sobel → thin → hysteresis), with a
      minimum contrast so flat, noisy backgrounds stay blank, refined to sub-pixel accuracy.
      Tracing edges on a line drawing would draw both sides of every line.

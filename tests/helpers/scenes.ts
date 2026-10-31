@@ -167,3 +167,73 @@ export function markerDoodle(colour: number[], watermark = false): RgbaImage {
     })
   );
 }
+
+/**
+ * A cartoon with large black fills (a cowl): a 300 × 200 black block around (256, 300), a
+ * navy patch inside it, and a 5 px black line above it. JPEG round-tripped.
+ */
+export const FILLED = {
+  block: { x0: 106, y0: 200, x1: 406, y1: 400 },
+  navy: { x0: 156, y0: 230, x1: 256, y1: 280 },
+  line: { y: 120, x0: 120, x1: 390 },
+};
+export function filledCartoon(): RgbaImage {
+  const { block, navy, line } = FILLED;
+  const inside = (b: typeof navy, x: number, y: number) =>
+    x >= b.x0 && x <= b.x1 && y >= b.y0 && y <= b.y1;
+  return jpegRoundTrip(
+    canvas(512, 512, (x, y) => {
+      if (inside(navy, x, y)) return [32, 28, 92];
+      if (inside(block, x, y)) return [5, 5, 8];
+      if (Math.abs(y - line.y) <= 2.5 && x >= line.x0 && x <= line.x1) return [10, 10, 10];
+      return [255, 255, 255];
+    })
+  );
+}
+
+/**
+ * A textured outdoor-style photo: mottled foliage tones everywhere (no flat areas) and a few
+ * thin dark branches, the kind of thin dark detail nearly every photo has.
+ */
+export function texturedPhoto(width = 512, height = 384): RgbaImage {
+  const noise = rng(21);
+  const branch = (x: number, y: number) =>
+    [0.3, 0.55, 0.8].some(
+      (k, i) => Math.abs(y - (k * height + 40 * Math.sin(x / (60 + 20 * i)))) < 2
+    );
+  return jpegRoundTrip(
+    canvas(width, height, (x, y) => {
+      const n = (noise() - 0.5) * 50;
+      const base = 120 + 50 * Math.sin(x / 9) * Math.cos(y / 7) + 30 * Math.sin((x + y) / 31);
+      if (branch(x, y)) return [30 + n / 5, 25 + n / 5, 20 + n / 5];
+      return [base * 0.7 + n, base + n, base * 0.5 + n];
+    })
+  );
+}
+
+/**
+ * Flat clip art with lines in colour: a 12 px black square frame filled light blue, with a
+ * 12 px brown cross (window bars) and, above it, a 12 px blue ring of radius 60 (a halo) on white.
+ */
+export const COLOURED = {
+  frame: { x0: 136, y0: 196, x1: 376, y1: 436 },
+  cx: 256,
+  cy: 316,
+  halo: { cy: 110, r: 60 },
+};
+export function colouredLines(): RgbaImage {
+  const { frame, cx, cy, halo } = COLOURED;
+  return jpegRoundTrip(
+    canvas(512, 512, (x, y) => {
+      const inFrame = x >= frame.x0 && x <= frame.x1 && y >= frame.y0 && y <= frame.y1;
+      const border =
+        inFrame &&
+        (x < frame.x0 + 12 || x > frame.x1 - 12 || y < frame.y0 + 12 || y > frame.y1 - 12);
+      if (border) return [15, 15, 15];
+      if (inFrame && (Math.abs(x - cx) <= 6 || Math.abs(y - cy) <= 6)) return [166, 121, 57];
+      if (inFrame) return [146, 211, 245];
+      if (Math.abs(Math.hypot(x - cx, y - halo.cy) - halo.r) <= 6) return [97, 178, 228];
+      return [255, 255, 255];
+    })
+  );
+}
